@@ -2,12 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
-import { places, type Place } from "./mock-data";
+import { mockUsers, places, type MockUser, type Place } from "./mock-data";
 
 type Screen = "splash" | "login" | "signup" | "home" | "search" | "planner" | "route" | "profile" | "detail";
-type Account = { name: string; email: string; password: string; birth?: string };
-
-const demoAccount: Account = { name: "Rafael", email: "rafael", password: "123456" };
 
 function Wordmark({ small = false }: { small?: boolean }) {
   return <div className={`wordmark ${small ? "wordmark--small" : ""}`}><span>rota</span><strong>São Luís</strong></div>;
@@ -45,8 +42,8 @@ function PlaceList({ items, color, onSelect, selected, onToggle }: { items: Plac
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("splash");
-  const [accounts, setAccounts] = useState<Account[]>([demoAccount]);
-  const [user, setUser] = useState<Account | null>(null);
+  const [accounts, setAccounts] = useState<MockUser[]>(mockUsers);
+  const [user, setUser] = useState<MockUser | null>(null);
   const [query, setQuery] = useState("");
   const [collection, setCollection] = useState<"popular" | "nearby" | "highlights">("popular");
   const [route, setRoute] = useState<string[]>([]);
@@ -98,13 +95,13 @@ export default function Home() {
       <form onSubmit={screen === "login" ? login : signup}>
         {screen === "signup" && <label>Nome completo<input name="name" required placeholder="Seu nome" /></label>}
         {screen === "signup" && <label>Data de nascimento<input name="birth" type="date" required /></label>}
-        <label>{screen === "login" ? "E-mail ou usuário" : "E-mail"}<input name="email" required autoComplete="username" placeholder={screen === "login" ? "rafael" : "nome@exemplo.com"} /></label>
+        <label>{screen === "login" ? "E-mail ou usuário" : "E-mail"}<input name="email" required autoComplete="username" placeholder={screen === "login" ? "admin" : "nome@exemplo.com"} /></label>
         <label>Senha<input name="password" required minLength={6} type="password" autoComplete={screen === "login" ? "current-password" : "new-password"} placeholder="••••••" /></label>
         {screen === "signup" && <label>Confirme a senha<input name="confirm" required minLength={6} type="password" placeholder="••••••" /></label>}
         {loginError && <p className="form-error" role="alert">{loginError}</p>}
         <button className="auth-submit" type="submit">{screen === "login" ? "Entrar" : "Cadastrar"}</button>
       </form>
-      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use o usuário Rafael e a senha 123456.")}>Esqueci minha senha</button><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><small>Demo: Rafael · 123456</small></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
+      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use o usuário admin e a senha 123456.")}>Esqueci minha senha</button><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><small>Demo: admin · 123456</small></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
     </section>
   </main>;
 
@@ -148,12 +145,12 @@ export default function Home() {
   if (screen === "route") return <main className="mobile-stage app-screen route-screen">
     <AppHeader title="Minha rota" onBack={() => show("home")} />
     <div className="map-preview"><div className="map-water" /><i /><i /><i />{route.map((id, index) => { const place = places.find((item) => item.id === id); return place ? <button key={id} className="route-map-pin" style={{ left: `${23 + index * 21}%`, top: `${28 + (index % 2) * 30}%` }} onClick={() => selectPlace(place)}>{index + 1}</button> : null; })}</div>
-    <section className="route-summary"><h2>Rota de hoje</h2>{route.length ? route.map((id, index) => { const place = places.find((item) => item.id === id); return place ? <div className="route-summary__item" key={id}><b>{index + 1}</b><img src={place.image.src} alt="" /><span>{place.name}<small>{place.duration} · {place.category}</small></span><button onClick={() => toggleStop(id)} aria-label={`Remover ${place.name}`}><Icon name="x" /></button></div> : null; }) : <p className="empty-route">Sua rota ainda está vazia. Escolha pontos para começar.</p>}<button className="start-route" onClick={() => setToast("Sua rota começou! Boa caminhada, Rafael.")}><Icon name="route" /> Começar rota</button></section>
+    <section className="route-summary"><h2>Rota de hoje</h2>{route.length ? route.map((id, index) => { const place = places.find((item) => item.id === id); return place ? <div className="route-summary__item" key={id}><b>{index + 1}</b><img src={place.image.src} alt="" /><span>{place.name}<small>{place.duration} · {place.category}</small></span><button onClick={() => toggleStop(id)} aria-label={`Remover ${place.name}`}><Icon name="x" /></button></div> : null; }) : <p className="empty-route">Sua rota ainda está vazia. Escolha pontos para começar.</p>}<button className="start-route" onClick={() => setToast(`Sua rota começou! Boa caminhada, ${user?.name ?? "Admin"}.`)}><Icon name="route" /> Começar rota</button></section>
     <BottomNav active="route" onNavigate={show} />
   </main>;
 
   return <main className="mobile-stage app-screen profile-screen">
-    <section className="profile-hero"><div className="profile-statue"><Icon name="user" /></div><h1>Olá, {user?.name || "Rafael"}!</h1></section>
+    <section className="profile-hero"><div className="profile-statue"><Icon name="user" /></div><h1>Olá, {user?.name || "Admin"}!</h1></section>
     <div className="profile-menu"><button><Icon name="user" /> Meu perfil <Icon name="chevron" /></button><button onClick={() => show("route")}><Icon name="heart" /> Meus favoritos <Icon name="chevron" /></button><button onClick={() => show("search")}><Icon name="map" /> Locais visitados <Icon name="chevron" /></button><button><Icon name="filter" /> Configurações <Icon name="chevron" /></button></div>
     <button className="logout-button" onClick={() => { setUser(null); setScreen("login"); }}>Sair da conta</button><Wordmark small /><BottomNav active="profile" onNavigate={show} />
   </main>;

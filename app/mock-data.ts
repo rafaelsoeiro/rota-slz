@@ -8,6 +8,21 @@ import bumbaMeuBoi from "../assets/1000206184_11cd255591f9633e1c1bb27740c006d7-2
 import regueira from "../assets/1000206203_d5b5d7c29ced77b0fb6eec8323ffe99f-26_09_2026, 11_31_49.png";
 import teatro from "../assets/1000206204_d1fca5c0e1df3c161212551d092544a0-26_09_2026, 11_36_39.png";
 
+export type MockUser = {
+  name: string;
+  email: string;
+  password: string;
+  birth?: string;
+};
+
+export const mockUsers: MockUser[] = [
+  {
+    name: "Admin",
+    email: "admin",
+    password: "123456",
+  },
+];
+
 export type Place = {
   id: string;
   name: string;
