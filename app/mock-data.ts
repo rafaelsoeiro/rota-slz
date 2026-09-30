@@ -21,6 +21,16 @@ export const mockUsers: MockUser[] = [
     email: "admin",
     password: "123456",
   },
+  {
+    name: "Julia",
+    email: "julia",
+    password: "123456",
+  },
+  {
+    name: "Leticia",
+    email: "leticia",
+    password: "123456",
+  },
 ];
 
 export type Place = {
