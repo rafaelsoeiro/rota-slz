@@ -1,6 +1,6 @@
 import type { StaticImageData } from "next/image";
 
-import casaDoMaranhao from "../assets/1000206130_15904a85a5c466e50ffa4a2a8158a432-10_09_2026, 14_53_47.png";
+import casaDoMaranhao from "../assets/icon_navbar_home.png";
 import palacio from "../assets/1000206131_df4b42006f76ed90ec7d39beab612765-10_09_2026, 14_53_45.png";
 import azulejos from "../assets/1000206132_56ca2218f82b6190ab1edb8e6919d8d4-10_09_2026, 16_45_01.png";
 import centroHistorico from "../assets/1000206181_3a3cb58cfd1a81c112d3d0f2abe1292a-25_09_2026, 11_16_56.png";
@@ -28,9 +28,10 @@ export type Place = {
   name: string;
   category: "História" | "Cultura" | "Gastronomia" | "Arquitetura";
   image: StaticImageData;
-  position: { x: number; y: number };
+  coordinates: { latitude: number; longitude: number };
   description: string;
   duration: string;
+  durationMinutes: number;
   address: string;
   rating: number;
   color: "yellow" | "blue" | "green";
@@ -42,10 +43,11 @@ export const places: Place[] = [
     name: "Palácio dos Leões",
     category: "História",
     image: palacio,
-    position: { x: 40, y: 30 },
+    coordinates: { latitude: -2.52819, longitude: -44.30662 },
     description: "Símbolo do poder maranhense, com vista privilegiada para a Baía de São Marcos.",
     duration: "45 min",
-    address: "Av. Pedro II, Centro",
+    durationMinutes: 45,
+    address: "Av. Dom Pedro II, s/n — Centro Histórico",
     rating: 4.9,
     color: "yellow",
   },
@@ -54,10 +56,11 @@ export const places: Place[] = [
     name: "Museu de Artes Visuais",
     category: "Cultura",
     image: azulejos,
-    position: { x: 61, y: 45 },
+    coordinates: { latitude: -2.52918, longitude: -44.30603 },
     description: "Arte, memória e os famosos azulejos portugueses em um casarão do século XIX.",
     duration: "1 h",
-    address: "Rua do Giz, Praia Grande",
+    durationMinutes: 60,
+    address: "Rua Portugal, 273 — Praia Grande",
     rating: 4.8,
     color: "blue",
   },
@@ -66,10 +69,11 @@ export const places: Place[] = [
     name: "Casa de Nhozinho",
     category: "Cultura",
     image: casaDoMaranhao,
-    position: { x: 31, y: 56 },
+    coordinates: { latitude: -2.52915, longitude: -44.30679 },
     description: "Um encontro afetivo com a criatividade e os saberes do artesanato maranhense.",
     duration: "50 min",
-    address: "Rua Portugal, Praia Grande",
+    durationMinutes: 50,
+    address: "Rua Portugal, 185 — Praia Grande",
     rating: 4.7,
     color: "green",
   },
@@ -78,9 +82,10 @@ export const places: Place[] = [
     name: "Beco da Regueira",
     category: "Gastronomia",
     image: regueira,
-    position: { x: 52, y: 68 },
+    coordinates: { latitude: -2.53058, longitude: -44.30522 },
     description: "Um dos becos mais vivos da cidade: sabores, música e mesas ao ar livre.",
     duration: "1 h 30",
+    durationMinutes: 90,
     address: "Rua da Estrela, Centro",
     rating: 4.8,
     color: "yellow",
@@ -90,10 +95,11 @@ export const places: Place[] = [
     name: "Teatro Arthur Azevedo",
     category: "Arquitetura",
     image: teatro,
-    position: { x: 70, y: 68 },
+    coordinates: { latitude: -2.53145, longitude: -44.30103 },
     description: "Um palco histórico inaugurado em 1817 e parte indispensável da cena cultural local.",
     duration: "40 min",
-    address: "Rua do Sol, Centro",
+    durationMinutes: 40,
+    address: "Rua do Sol, 180 — Centro",
     rating: 4.9,
     color: "blue",
   },
@@ -102,10 +108,11 @@ export const places: Place[] = [
     name: "Casa do Maranhão",
     category: "Cultura",
     image: bumbaMeuBoi,
-    position: { x: 76, y: 30 },
+    coordinates: { latitude: -2.52973, longitude: -44.30812 },
     description: "A riqueza do Bumba Meu Boi e das festas que fazem pulsar o Maranhão.",
     duration: "1 h",
-    address: "Rua do Trapiche, Praia Grande",
+    durationMinutes: 60,
+    address: "Rua do Trapiche — Praia Grande",
     rating: 4.8,
     color: "green",
   },
@@ -114,9 +121,10 @@ export const places: Place[] = [
     name: "Centro Histórico",
     category: "Arquitetura",
     image: centroHistorico,
-    position: { x: 20, y: 37 },
+    coordinates: { latitude: -2.52986, longitude: -44.30417 },
     description: "Caminhe por uma das maiores coleções de arquitetura colonial portuguesa da América Latina.",
     duration: "2 h",
+    durationMinutes: 120,
     address: "Centro, São Luís",
     rating: 4.9,
     color: "yellow",

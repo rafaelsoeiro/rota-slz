@@ -17,6 +17,7 @@ type IconName =
   | "search"
   | "sparkle"
   | "star"
+  | "trophy"
   | "user"
   | "x";
 
@@ -40,6 +41,7 @@ export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGEle
     search: <><circle {...common} cx="10.8" cy="10.8" r="6.5"/><path {...common} d="m16 16 4.3 4.3"/></>,
     sparkle: <path {...common} d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/>,
     star: <path {...common} d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 5.9-5.4-2.9-5.4 2.9 1-5.9L3.3 9.4l6-.9L12 3Z"/>,
+    trophy: <><path {...common} d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path {...common} d="M8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v5M8.5 21h7M9 18h6"/></>,
     user: <><circle {...common} cx="12" cy="8" r="3.5"/><path {...common} d="M5 21a7 7 0 0 1 14 0"/></>,
     x: <path {...common} d="m6 6 12 12M18 6 6 18"/>,
   };
