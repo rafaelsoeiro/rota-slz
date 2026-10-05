@@ -9,8 +9,8 @@ import type { Place } from "@/app/mock-data";
 
 type TouristMapProps = {
   places: Place[];
-  activePlaceId?: string;
-  routePlaceIds?: string[];
+  activePlaceId?: number;
+  routePlaceIds?: number[];
   onSelect: (place: Place) => void;
 };
 

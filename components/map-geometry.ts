@@ -1,10 +1,10 @@
 import type { Place } from "@/app/mock-data";
 
 const MAP_BOUNDS = {
-  north: -2.5269,
-  south: -2.5331,
+  north: -2.5228,
+  south: -2.5362,
   west: -44.3095,
-  east: -44.2998,
+  east: -44.2938,
 };
 
 export type MapPoint = { x: number; y: number };
