@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import { Icon } from "@/components/icons";
 import { mockUsers, monthlyHighlights, places, type MockUser, type Place } from "./mock-data";
 import homeNavigationIcon from "../assets/icon_navbar_home.png";
@@ -78,21 +79,16 @@ function FeedbackToast({ message, onDismiss }: { message: string; onDismiss: () 
   return <div className="app-toast" role="status">{message}<button onClick={onDismiss} aria-label="Fechar mensagem"><Icon name="x" /></button></div>;
 }
 
-type QrCodeDetector = {
-  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
-};
-type QrCodeDetectorConstructor = new (options?: { formats?: string[] }) => QrCodeDetector;
-
 function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetected: (value: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+  const detectedRef = useRef(false);
   const [status, setStatus] = useState("Iniciando câmera…");
-  const [manualValue, setManualValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    const detectorConstructor = (window as Window & { BarcodeDetector?: QrCodeDetectorConstructor }).BarcodeDetector;
+    const reader = new BrowserQRCodeReader();
+    const videoElement = videoRef.current;
 
     const startScanner = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -101,49 +97,38 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        if (!detectorConstructor) {
-          setStatus("Leitura automática indisponível. Cole o conteúdo do QR Code abaixo.");
-          return;
-        }
-
-        const detector = new detectorConstructor({ formats: ["qr_code"] });
         setStatus("Aponte a câmera para um QR Code");
-        const scan = async () => {
-          if (cancelled || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            const value = codes[0]?.rawValue?.trim();
-            if (value) {
+        if (!videoElement) return;
+
+        controlsRef.current = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: "environment" } }, audio: false },
+          videoElement,
+          (result) => {
+            const value = result?.getText().trim();
+            if (!cancelled && !detectedRef.current && value) {
+              detectedRef.current = true;
+              setStatus("QR Code lido com sucesso!");
               onDetected(value);
-              return;
             }
-          } catch {
-            setStatus("Não foi possível ler este QR Code. Tente novamente.");
-          }
-          animationFrameRef.current = window.requestAnimationFrame(() => { void scan(); });
-        };
-        void scan();
+          },
+        );
+        if (cancelled) controlsRef.current?.stop();
       } catch {
-        setStatus("Não foi possível acessar a câmera. Verifique a permissão ou cole o conteúdo do QR Code.");
+        if (!cancelled) {
+          setStatus("Não foi possível acessar a câmera. Verifique a permissão e tente novamente.");
+        }
       }
     };
 
     void startScanner();
     return () => {
       cancelled = true;
-      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+      if (videoElement) {
+        videoElement.pause();
+        videoElement.srcObject = null;
+      }
     };
   }, [onDetected]);
 
@@ -152,7 +137,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
     <div className="scanner-content">
       <h2 id="scanner-title">Escanear QR Code</h2>
       <div className="scanner-frame"><video ref={videoRef} autoPlay muted playsInline /><i /><i /><i /><i /><span>{status}</span></div>
-      <label className="scanner-manual"><span>Ou cole o conteúdo do QR Code</span><input value={manualValue} onChange={(event) => setManualValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && manualValue.trim()) onDetected(manualValue.trim()); }} placeholder="Código ou URL" /><button type="button" disabled={!manualValue.trim()} onClick={() => onDetected(manualValue.trim())}>Validar código</button></label>
+      <p className="scanner-hint">Aproxime o QR Code da moldura. A leitura acontece automaticamente.</p>
     </div>
   </div>;
 }
@@ -315,7 +300,13 @@ export default function Home() {
       setToast(`QR Code reconhecido: ${place.name}.`);
       return;
     }
-    setToast("QR Code lido, mas ele não corresponde a um ponto turístico cadastrado.");
+    try {
+      const url = new URL(value.trim());
+      window.open(url.toString(), "_blank", "noopener,noreferrer");
+      setToast("QR Code lido. Abrimos o link em uma nova aba.");
+    } catch {
+      setToast(`QR Code lido: ${value.trim()}`);
+    }
   }, []);
 
   const login = (event: FormEvent<HTMLFormElement>) => {
