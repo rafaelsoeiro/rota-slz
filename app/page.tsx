@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { Icon } from "@/components/icons";
@@ -13,6 +13,7 @@ import museusCategory from "../assets/categorias/museus.png";
 import restaurantesCategory from "../assets/categorias/restaurantes&cafes.png";
 import igrejasCategory from "../assets/categorias/igrejas.png";
 import lojasCategory from "../assets/categorias/lojas&sebos.png";
+import qrCodeBlue from "../assets/icones/qr-code-blue.png";
 
 type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "detail";
 type NavActive = Screen | "nearby";
@@ -75,6 +76,85 @@ function PlaceList({ items, color, onSelect, selected, onToggle }: { items: Plac
 function FeedbackToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   if (!message) return null;
   return <div className="app-toast" role="status">{message}<button onClick={onDismiss} aria-label="Fechar mensagem"><Icon name="x" /></button></div>;
+}
+
+type QrCodeDetector = {
+  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
+};
+type QrCodeDetectorConstructor = new (options?: { formats?: string[] }) => QrCodeDetector;
+
+function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetected: (value: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const [status, setStatus] = useState("Iniciando câmera…");
+  const [manualValue, setManualValue] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const detectorConstructor = (window as Window & { BarcodeDetector?: QrCodeDetectorConstructor }).BarcodeDetector;
+
+    const startScanner = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("A câmera não está disponível neste dispositivo.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        if (!detectorConstructor) {
+          setStatus("Leitura automática indisponível. Cole o conteúdo do QR Code abaixo.");
+          return;
+        }
+
+        const detector = new detectorConstructor({ formats: ["qr_code"] });
+        setStatus("Aponte a câmera para um QR Code");
+        const scan = async () => {
+          if (cancelled || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            const value = codes[0]?.rawValue?.trim();
+            if (value) {
+              onDetected(value);
+              return;
+            }
+          } catch {
+            setStatus("Não foi possível ler este QR Code. Tente novamente.");
+          }
+          animationFrameRef.current = window.requestAnimationFrame(() => { void scan(); });
+        };
+        void scan();
+      } catch {
+        setStatus("Não foi possível acessar a câmera. Verifique a permissão ou cole o conteúdo do QR Code.");
+      }
+    };
+
+    void startScanner();
+    return () => {
+      cancelled = true;
+      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, [onDetected]);
+
+  return <div className="scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
+    <button onClick={onClose} aria-label="Fechar leitor"><Icon name="x" /></button>
+    <div className="scanner-content">
+      <h2 id="scanner-title">Escanear QR Code</h2>
+      <div className="scanner-frame"><video ref={videoRef} autoPlay muted playsInline /><i /><i /><i /><i /><span>{status}</span></div>
+      <label className="scanner-manual"><span>Ou cole o conteúdo do QR Code</span><input value={manualValue} onChange={(event) => setManualValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && manualValue.trim()) onDetected(manualValue.trim()); }} placeholder="Código ou URL" /><button type="button" disabled={!manualValue.trim()} onClick={() => onDetected(manualValue.trim())}>Validar código</button></label>
+    </div>
+  </div>;
 }
 
 function SearchLanding({ query, onQueryChange, onBack, onCategory, onNearby }: { query: string; onQueryChange: (value: string) => void; onBack: () => void; onCategory: (value: string) => void; onNearby: () => void }) {
@@ -223,6 +303,20 @@ export default function Home() {
   };
   const selectPlace = (place: Place, origin: DetailOrigin) => { setSelectedPlace(place); setDetailOrigin(origin); setScreen("detail"); };
   const returnFromDetail = () => setScreen(detailOrigin);
+  const handleQrDetected = useCallback((value: string) => {
+    const normalizedValue = value.trim().toLocaleLowerCase("pt-BR");
+    const idFromValue = normalizedValue.match(/(?:place|ponto|id)[=/:_-]?(\d+)/)?.[1] ?? (/^\d+$/.test(normalizedValue) ? normalizedValue : null);
+    const place = idFromValue ? places.find((item) => item.id === Number(idFromValue)) : places.find((item) => item.name.toLocaleLowerCase("pt-BR") === normalizedValue);
+    setScannerOpen(false);
+    if (place) {
+      setSelectedPlace(place);
+      setDetailOrigin("search");
+      setScreen("detail");
+      setToast(`QR Code reconhecido: ${place.name}.`);
+      return;
+    }
+    setToast("QR Code lido, mas ele não corresponde a um ponto turístico cadastrado.");
+  }, []);
 
   const login = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -263,7 +357,7 @@ export default function Home() {
   </main>;
 
   if (screen === "home") return <main className="mobile-stage app-screen home-screen">
-    <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><span /><span /><span /><span /></button></header>
+    <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><Image src={qrCodeBlue} alt="" /></button></header>
     <label className="home-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => { setCollection("popular"); setActiveCategory(null); setSearchLandingVisible(true); setScreen("search"); }} placeholder="Para onde vamos?" /></label>
     <section className="home-sections">
       <button className="home-section home-section--popular" onClick={showPopular}><span><b>Destinos populares</b><small>Histórias que todo mundo precisa viver</small></span><Icon name="sparkle" /></button>
@@ -272,7 +366,7 @@ export default function Home() {
     </section>
     <div className="home-helper"><span>Comece sua jornada</span><b>Escolha uma das experiências acima</b></div>
     <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
-    {scannerOpen && <div className="scanner-modal"><button onClick={() => setScannerOpen(false)} aria-label="Fechar leitor"><Icon name="x" /></button><div className="scanner-frame"><i /><i /><i /><i /><span>Posicione o QR Code aqui</span></div><p>Simulação de câmera. Seus destinos podem ter códigos de acesso rápido.</p></div>}
+    {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onDetected={handleQrDetected} />}
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
@@ -309,7 +403,7 @@ export default function Home() {
   if (screen === "highlights") return <MonthlyHighlights onBack={() => show("home")} onNavigate={show} onNearby={showNearby} onSelect={(place) => selectPlace(place, "highlights")} />;
 
   return <main className="mobile-stage app-screen home-screen">
-    <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><span /><span /><span /><span /></button></header>
+    <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><Image src={qrCodeBlue} alt="" /></button></header>
     <p className="home-helper"><span>Não encontramos esta tela</span><b>Volte para o início para continuar explorando São Luís.</b></p>
     <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
   </main>;
