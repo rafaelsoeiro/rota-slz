@@ -4,14 +4,29 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { Icon } from "@/components/icons";
-import { getMapPoint } from "@/components/map-geometry";
 import { mockUsers, monthlyHighlights, places, type MockUser, type Place } from "./mock-data";
-import portalLogin from "../assets/portal_login_scream.png";
 import homeNavigationIcon from "../assets/icon_navbar_home.png";
+import brandLogo from "../assets/logo/logo.png";
+import casarõesCategory from "../assets/categorias/casaroes.png";
+import ruasPracasCategory from "../assets/categorias/ruas&pracas.png";
+import museusCategory from "../assets/categorias/museus.png";
+import restaurantesCategory from "../assets/categorias/restaurantes&cafes.png";
+import igrejasCategory from "../assets/categorias/igrejas.png";
+import lojasCategory from "../assets/categorias/lojas&sebos.png";
 
-type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "planner" | "route" | "profile" | "detail";
-type DetailOrigin = "search" | "highlights" | "planner" | "route";
+type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "detail";
+type NavActive = Screen | "nearby";
+type DetailOrigin = "search" | "highlights";
 type Coordinates = { latitude: number; longitude: number };
+
+const searchCategories = [
+  { label: "Casarões", value: "casarão", image: casarõesCategory },
+  { label: "Ruas e Praças", value: "rua", image: ruasPracasCategory },
+  { label: "Museus", value: "museu", image: museusCategory },
+  { label: "Restaurantes e Cafés", value: "gastronomia", image: restaurantesCategory },
+  { label: "Igrejas", value: "igreja", image: igrejasCategory },
+  { label: "Lojas e Sebos", value: "sebo", image: lojasCategory },
+];
 
 const TouristMap = dynamic(() => import("@/components/tourist-map"), {
   ssr: false,
@@ -22,13 +37,15 @@ function Wordmark({ small = false }: { small?: boolean }) {
   return <div className={`wordmark ${small ? "wordmark--small" : ""}`}><span>rota</span><strong>São Luís</strong></div>;
 }
 
-function BottomNav({ onNavigate, active }: { active: Screen; onNavigate: (screen: Screen) => void }) {
+function BrandLogo({ className = "" }: { className?: string }) {
+  return <Image className={`brand-logo ${className}`} src={brandLogo} alt="Rota São Luís" priority />;
+}
+
+function BottomNav({ onNavigate, onNearby, active }: { active: NavActive; onNavigate: (screen: Screen) => void; onNearby: () => void }) {
   return <nav className="bottom-nav" aria-label="Navegação principal">
     <button onClick={() => onNavigate("search")} aria-label="Explorar destinos"><Icon name="search" /></button>
-    <button onClick={() => onNavigate("planner")} aria-label="Planejar rota"><Icon name="route" /></button>
     <button className="home-button" onClick={() => onNavigate("home")} aria-label="Tela inicial"><span><Image src={homeNavigationIcon} alt="" /></span></button>
-    <button className={active === "route" ? "is-active" : ""} onClick={() => onNavigate("route")} aria-label="Minhas rotas"><Icon name="map" /></button>
-    <button className={active === "profile" ? "is-active" : ""} onClick={() => onNavigate("profile")} aria-label="Meu perfil"><Icon name="user" /></button>
+    <button className={active === "nearby" ? "is-active" : ""} onClick={onNearby} aria-label="Destinos próximos"><Icon name="pin" /></button>
   </nav>;
 }
 
@@ -39,7 +56,7 @@ function AppHeader({ title, onBack, color = "yellow" }: { title: string; onBack?
   </header>;
 }
 
-function PlaceList({ items, color, onSelect, selected, onToggle }: { items: Place[]; color: "yellow" | "blue" | "green"; onSelect: (place: Place) => void; selected?: string[]; onToggle?: (id: string) => void }) {
+function PlaceList({ items, color, onSelect, selected, onToggle }: { items: Place[]; color: "yellow" | "blue" | "green"; onSelect: (place: Place) => void; selected?: number[]; onToggle?: (id: number) => void }) {
   return <div className={`place-list place-list--${color}`}>
     {items.map((place, index) => <article className="tourist-item" key={place.id}>
       {onToggle && <button className={`stop-toggle ${selected?.includes(place.id) ? "is-selected" : ""}`} onClick={() => onToggle(place.id)} aria-label={`Selecionar ${place.name}`}>{selected?.includes(place.id) ? "✓" : index + 1}</button>}
@@ -57,11 +74,26 @@ function FeedbackToast({ message, onDismiss }: { message: string; onDismiss: () 
   return <div className="app-toast" role="status">{message}<button onClick={onDismiss} aria-label="Fechar mensagem"><Icon name="x" /></button></div>;
 }
 
-function formatRouteDuration(totalMinutes: number) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (!hours) return `${minutes} min`;
-  return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+function SearchLanding({ query, onQueryChange, onBack, onCategory, onNearby }: { query: string; onQueryChange: (value: string) => void; onBack: () => void; onCategory: (value: string) => void; onNearby: () => void }) {
+  return <main className="mobile-stage app-screen search-landing-screen">
+    <header className="search-landing-header">
+      <button className="search-landing-menu" onClick={onBack} aria-label="Voltar para a tela inicial"><span /><span /><span /></button>
+      <label className="search-landing-input">
+        <Icon name="search" />
+        <input aria-label="Buscar ponto turístico" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="....." autoFocus />
+      </label>
+    </header>
+    <div className="search-quick-filters" aria-label="Filtros rápidos">
+      {searchCategories.slice(0, 4).map((category) => <button key={category.value} onClick={() => onCategory(category.value)}><Icon name="search" />{category.label}</button>)}
+    </div>
+    <section className="search-category-grid" aria-label="Categorias de lugares">
+      {searchCategories.map((category) => <button className="search-category-card" key={category.value} onClick={() => onCategory(category.value)}>
+        <Image src={category.image} alt="" sizes="(max-width: 430px) 30vw, 130px" />
+        <span>{category.label}</span>
+      </button>)}
+    </section>
+    <BottomNav active="search" onNavigate={(screen) => screen === "home" ? onBack() : undefined} onNearby={onNearby} />
+  </main>;
 }
 
 function distanceInKilometers(from: Coordinates, to: Coordinates) {
@@ -73,8 +105,20 @@ function distanceInKilometers(from: Coordinates, to: Coordinates) {
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function MonthlyHighlights({ onBack, onNavigate, onSelect }: { onBack: () => void; onNavigate: (screen: Screen) => void; onSelect: (place: Place) => void }) {
-  const featuredPlaces = [places[1], places[3], places[5]];
+function matchesSearchCategory(place: Place, value: string) {
+  const searchableName = `${place.name} ${place.description} ${place.address}`.toLocaleLowerCase("pt-BR");
+  if (value === "casarão") return place.category === "Arquitetura" || searchableName.includes("palácio");
+  if (value === "rua") return /rua|beco|praça|centro histórico/.test(searchableName);
+  if (value === "museu") return /museu|centro cultural|centro de pesquisa|casa do tambor|casa do maranhão/.test(searchableName);
+  if (value === "gastronomia") return place.category === "Gastronomia";
+  if (value === "igreja") return /igreja|catedral|paróquia/.test(searchableName);
+  if (value === "sebo") return /sebo|livraria|empório|tulhas/.test(searchableName);
+  return false;
+}
+
+function MonthlyHighlights({ onBack, onNavigate, onNearby, onSelect }: { onBack: () => void; onNavigate: (screen: Screen) => void; onNearby: () => void; onSelect: (place: Place) => void }) {
+  const featuredPlaceIds = [12, 8, 17];
+  const featuredPlaces = featuredPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
 
   return <main className="mobile-stage app-screen highlights-screen">
     <AppHeader title="Destaques do mês" onBack={onBack} />
@@ -93,21 +137,18 @@ function MonthlyHighlights({ onBack, onNavigate, onSelect }: { onBack: () => voi
       })}
     </section>
     <p className="highlights-note">Descubra caminhos especiais para viver São Luís neste mês.</p>
-    <BottomNav active="home" onNavigate={onNavigate} />
+    <BottomNav active="home" onNavigate={onNavigate} onNearby={onNearby} />
   </main>;
 }
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [accounts, setAccounts] = useState<MockUser[]>(mockUsers);
-  const [user, setUser] = useState<MockUser | null>(null);
   const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [collection, setCollection] = useState<"popular" | "nearby" | "highlights">("popular");
-  const [route, setRoute] = useState<string[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<Place>(places[0]);
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin>("search");
-  const [routeStarted, setRouteStarted] = useState(false);
-  const [routeHydrated, setRouteHydrated] = useState(false);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [loginError, setLoginError] = useState("");
   const [toast, setToast] = useState("");
@@ -119,23 +160,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const savedRoute = JSON.parse(window.localStorage.getItem("rota-slz-route") ?? "[]") as string[];
-        setRoute(savedRoute.filter((id) => places.some((place) => place.id === id)));
-      } catch {
-        window.localStorage.removeItem("rota-slz-route");
-      }
-      setRouteHydrated(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (routeHydrated) window.localStorage.setItem("rota-slz-route", JSON.stringify(route));
-  }, [route, routeHydrated]);
-
-  useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(""), 3600);
     return () => window.clearTimeout(timeout);
@@ -143,21 +167,32 @@ export default function Home() {
 
   const visiblePlaces = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
-    if (!normalized) return places;
-    return places.filter((place) => `${place.name} ${place.category} ${place.address}`.toLocaleLowerCase("pt-BR").includes(normalized));
-  }, [query]);
+    return places.filter((place) => {
+      const matchesText = !normalized || `${place.name} ${place.category} ${place.description} ${place.address}`.toLocaleLowerCase("pt-BR").includes(normalized);
+      return matchesText && (!activeCategory || matchesSearchCategory(place, activeCategory));
+    });
+  }, [activeCategory, query]);
   const nearbyPlaces = useMemo(() => {
     const origin = userLocation ?? { latitude: -2.5292, longitude: -44.3061 };
-    return [...places].sort((first, second) => distanceInKilometers(origin, first.coordinates) - distanceInKilometers(origin, second.coordinates)).slice(0, 5);
+    return places
+      .map((place) => ({ place, distance: distanceInKilometers(origin, place.coordinates) }))
+      .filter(({ distance }) => distance < 5)
+      .sort((first, second) => first.distance - second.distance)
+      .map(({ place }) => place);
   }, [userLocation]);
-  const collectionPlaces = collection === "popular" ? places.slice(0, 5) : collection === "nearby" ? nearbyPlaces : [places[2], places[0], places[5], places[1], places[4]];
-  const routePlaces = useMemo(() => route.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place)), [route]);
-  const routeVisitMinutes = routePlaces.reduce((total, place) => total + place.durationMinutes, 0);
+  const highlightsPlaceIds = [3, 1, 6, 8, 12];
+  const highlightsPlaces = highlightsPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
+  const collectionPlaces = collection === "popular" ? places.slice(0, 5) : collection === "nearby" ? nearbyPlaces : highlightsPlaces;
+  const mapPlaces = query || activeCategory ? visiblePlaces : collectionPlaces;
 
-  const show = (next: Screen) => { setScreen(next); setQuery(""); };
+  const show = (next: Screen) => { if (next === "search") setCollection("popular"); setScreen(next); setQuery(""); setActiveCategory(null); };
+  const showCategory = (value: string) => { setCollection("popular"); setQuery(""); setActiveCategory(value); setScreen("search"); };
   const showNearby = () => {
     setCollection("nearby");
-    show("search");
+    setQuery("");
+    setActiveCategory(null);
+    setUserLocation(null);
+    setScreen("search");
     if (!navigator.geolocation) {
       setToast("Seu dispositivo não oferece localização. Usamos o Centro Histórico como referência.");
       return;
@@ -170,9 +205,6 @@ export default function Home() {
   };
   const selectPlace = (place: Place, origin: DetailOrigin) => { setSelectedPlace(place); setDetailOrigin(origin); setScreen("detail"); };
   const returnFromDetail = () => setScreen(detailOrigin);
-  const addStop = (id: string) => { setRouteStarted(false); setRoute((current) => current.includes(id) ? current : [...current, id]); };
-  const removeStop = (id: string) => { setRouteStarted(false); setRoute((current) => current.filter((stop) => stop !== id)); };
-  const toggleStop = (id: string) => { setRouteStarted(false); setRoute((current) => current.includes(id) ? current.filter((stop) => stop !== id) : [...current, id]); };
 
   const login = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -181,7 +213,7 @@ export default function Home() {
     const password = String(form.get("password") ?? "");
     const found = accounts.find((account) => (account.email.toLocaleLowerCase() === identity || account.name.toLocaleLowerCase() === identity) && account.password === password);
     if (!found) { setLoginError("Usuário ou senha incorretos."); return; }
-    setUser(found); setLoginError(""); setScreen("home");
+    setLoginError(""); setScreen("home");
   };
   const signup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -189,15 +221,14 @@ export default function Home() {
     const newAccount = { name: String(form.get("name") ?? "").trim(), email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), birth: String(form.get("birth") ?? "") };
     if (newAccount.password !== String(form.get("confirm") ?? "")) { setLoginError("As senhas não coincidem."); return; }
     if (accounts.some((account) => account.email.toLocaleLowerCase() === newAccount.email.toLocaleLowerCase())) { setLoginError("Este e-mail já está cadastrado."); return; }
-    setAccounts((current) => [...current, newAccount]); setUser(newAccount); setLoginError(""); setScreen("home");
+    setAccounts((current) => [...current, newAccount]); setLoginError(""); setScreen("home");
   };
 
-  if (screen === "splash") return <main className="mobile-stage splash-screen"><div className="splash-sun" /><div className="splash-lamp"><span /><i /></div><Wordmark /><p>Viva a história de cada caminho.</p></main>;
+  if (screen === "splash") return <main className="mobile-stage splash-screen"><div className="splash-sun" /><div className="splash-lamp"><span /><i /></div><BrandLogo className="brand-logo--splash" /><p>Viva a história de cada caminho.</p></main>;
 
   if (screen === "login" || screen === "signup") return <main className="mobile-stage auth-screen">
-    {screen === "login" ? <Image className="auth-portal" src={portalLogin} alt="" preload /> : <div className="auth-arch"><div className="arch-window"><span /><span /><span /></div><div className="arch-railing" /></div>}
+    {screen === "login" ? <BrandLogo className="brand-logo--login" /> : <div className="auth-arch"><div className="arch-window"><span /><span /><span /></div><div className="arch-railing" /></div>}
     <section className="auth-card">
-      <h1>{screen === "login" ? <>Bem<br /><em>vindo</em></> : <>Cadastre-<em>se</em></>}</h1>
       <p>{screen === "login" ? "Entre e crie memórias pelos caminhos de São Luís." : "Crie sua conta e comece a montar sua rota."}</p>
       <form onSubmit={screen === "login" ? login : signup}>
         {screen === "signup" && <label>Nome completo<input name="name" required placeholder="Seu nome" /></label>}
@@ -208,72 +239,51 @@ export default function Home() {
         {loginError && <p className="form-error" role="alert">{loginError}</p>}
         <button className="auth-submit" type="submit">{screen === "login" ? "Entrar" : "Cadastrar"}</button>
       </form>
-      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use o usuário admin e a senha 123456.")}>Esqueci minha senha</button><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><small>Demo: admin · 123456</small></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
+      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use o usuário admin e a senha 123456.")}>Esqueci minha senha</button><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><button type="button" className="demo-login-button" onClick={() => { setLoginError(""); setScreen("home"); }} aria-label="Entrar rapidamente como admin">Demo: <b>admin</b> · 123456</button></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
     </section>
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
   if (screen === "home") return <main className="mobile-stage app-screen home-screen">
     <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><span /><span /><span /><span /></button></header>
-    <label className="home-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setScreen("search")} placeholder="Para onde vamos?" /></label>
+    <label className="home-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => { setCollection("popular"); setActiveCategory(null); setScreen("search"); }} placeholder="Para onde vamos?" /></label>
     <section className="home-sections">
       <button className="home-section home-section--popular" onClick={() => { setCollection("popular"); show("search"); }}><span><b>Destinos populares</b><small>Histórias que todo mundo precisa viver</small></span><Icon name="sparkle" /></button>
       <button className="home-section home-section--nearby" onClick={showNearby}><span><b>Destinos próximos</b><small>Descubra o que está ao seu redor</small></span><Icon name="pin" /></button>
       <button className="home-section home-section--highlights" onClick={() => show("highlights")}><span><b>Destaques do mês</b><small>Experiências selecionadas para você</small></span><Icon name="star" /></button>
     </section>
     <div className="home-helper"><span>Comece sua jornada</span><b>Escolha uma das experiências acima</b></div>
-    <BottomNav active="home" onNavigate={show} />
+    <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
     {scannerOpen && <div className="scanner-modal"><button onClick={() => setScannerOpen(false)} aria-label="Fechar leitor"><Icon name="x" /></button><div className="scanner-frame"><i /><i /><i /><i /><span>Posicione o QR Code aqui</span></div><p>Simulação de câmera. Seus destinos podem ter códigos de acesso rápido.</p></div>}
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
+  if (screen === "search" && !query && !activeCategory && collection === "popular") return <SearchLanding query={query} onQueryChange={setQuery} onBack={() => show("home")} onCategory={showCategory} onNearby={showNearby} />;
+
   if (screen === "search") return <main className="mobile-stage app-screen list-screen">
-    <AppHeader title={query ? "Resultados" : collection === "popular" ? "Destinos populares" : collection === "nearby" ? "Destinos próximos" : "Destaques do mês"} onBack={() => show("home")} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} />
+    <AppHeader title={activeCategory || query ? "Resultados" : collection === "popular" ? "Destinos populares" : collection === "nearby" ? "Destinos próximos" : "Destaques do mês"} onBack={() => show("home")} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} />
     <label className={`list-search list-search--${collection}`}><Icon name="search" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ponto turístico" /></label>
-    <p className="list-instruction">{query ? `${visiblePlaces.length} ponto${visiblePlaces.length === 1 ? "" : "s"} turístico${visiblePlaces.length === 1 ? "" : "s"} encontrado${visiblePlaces.length === 1 ? "" : "s"}` : collection === "nearby" ? userLocation ? "Organizado pela sua localização atual" : "Proximidade estimada a partir do Centro Histórico" : "Toque em um local para conhecer sua história"}</p>
-    <TouristMap places={places} routePlaceIds={route} onSelect={(place) => selectPlace(place, "search")} />
-    <PlaceList items={query ? visiblePlaces : collectionPlaces} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} onSelect={(place) => selectPlace(place, "search")} />
-    {query && !visiblePlaces.length && <div className="not-found"><Icon name="search" /><b>Nenhum ponto encontrado</b><span>Todos os resultados são da nossa lista local de São Luís.</span></div>}
-    <BottomNav active="search" onNavigate={show} />
+    <p className="list-instruction">{query || activeCategory ? `${visiblePlaces.length} ponto${visiblePlaces.length === 1 ? "" : "s"} turístico${visiblePlaces.length === 1 ? "" : "s"} encontrado${visiblePlaces.length === 1 ? "" : "s"}` : collection === "nearby" ? userLocation ? `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} a menos de 5 km da sua localização` : `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} a menos de 5 km do Centro Histórico (estimativa)` : "Toque em um local para conhecer sua história"}</p>
+    {mapPlaces.length ? <TouristMap places={mapPlaces} onSelect={(place) => selectPlace(place, "search")} /> : <div className="not-found"><Icon name="pin" /><b>Nenhum destino próximo</b><span>Não encontramos pontos a menos de 5 km da referência selecionada.</span></div>}
+    {mapPlaces.length ? <PlaceList items={query || activeCategory ? visiblePlaces : collectionPlaces} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} onSelect={(place) => selectPlace(place, "search")} /> : null}
+    {(query || activeCategory) && !visiblePlaces.length && <div className="not-found"><Icon name="search" /><b>Nenhum ponto encontrado</b><span>Todos os resultados são da nossa lista local de São Luís.</span></div>}
+    <BottomNav active={collection === "nearby" ? "nearby" : "search"} onNavigate={show} onNearby={showNearby} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
-
-  if (screen === "highlights") return <MonthlyHighlights onBack={() => show("home")} onNavigate={show} onSelect={(place) => selectPlace(place, "highlights")} />;
 
   if (screen === "detail") return <main className="mobile-stage app-screen detail-screen">
     <AppHeader title="Galeria histórica" onBack={returnFromDetail} />
-    <article className="history-card"><Image src={selectedPlace.image} alt={selectedPlace.name} /><div><span className="place-kind">{selectedPlace.category}</span><h2>{selectedPlace.name}</h2><p>{selectedPlace.description}</p><p className="long-copy">Um convite para caminhar com calma, observar os detalhes e descobrir os encontros que fazem do Centro Histórico de São Luís um lugar único.</p><div className="history-meta"><span><Icon name="clock" /> {selectedPlace.duration}</span><span><Icon name="star" /> {selectedPlace.rating}</span></div><button className={`route-add ${route.includes(selectedPlace.id) ? "is-added" : ""}`} onClick={() => { if (route.includes(selectedPlace.id)) { removeStop(selectedPlace.id); setToast("Ponto removido da sua rota."); } else { addStop(selectedPlace.id); setToast("Ponto adicionado à sua rota."); } }}><Icon name={route.includes(selectedPlace.id) ? "x" : "plus"} /> {route.includes(selectedPlace.id) ? "Remover da rota" : "Adicionar à rota"}</button></div></article>
-    <BottomNav active="search" onNavigate={show} />
+    <article className="history-card"><Image src={selectedPlace.image} alt={selectedPlace.name} /><div><span className="place-kind">{selectedPlace.category}</span><h2>{selectedPlace.name}</h2><p>{selectedPlace.description}</p><p className="long-copy">Um convite para caminhar com calma, observar os detalhes e descobrir os encontros que fazem do Centro Histórico de São Luís um lugar único.</p><div className="history-meta"><span><Icon name="clock" /> {selectedPlace.duration}</span><span><Icon name="star" /> {selectedPlace.rating}</span></div></div></article>
+    <BottomNav active="search" onNavigate={show} onNearby={showNearby} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
-  if (screen === "planner") return <main className="mobile-stage app-screen planner-screen">
-    <AppHeader title="Planeje sua rota" onBack={() => show("home")} />
-    <div className="route-path"><Icon name="route" /><span /><Icon name="pin" /></div>
-    <section className="route-builder"><p>Crie sua rota</p><h2>Escolha os lugares que quer visitar</h2><p className="route-builder__caption">{route.length ? `${route.length} ${route.length === 1 ? "parada selecionada" : "paradas selecionadas"}` : "Todos os pontos turísticos estão disponíveis"}</p><PlaceList items={places} color="yellow" onSelect={(place) => selectPlace(place, "planner")} selected={route} onToggle={toggleStop} /></section>
-    <button className="route-create" onClick={() => { if (!route.length) { setToast("Selecione pelo menos um ponto turístico."); return; } show("route"); }}>Ver minha rota · {route.length} {route.length === 1 ? "parada" : "paradas"}</button>
-    <BottomNav active="planner" onNavigate={show} />
-    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
-  </main>;
+  if (screen === "highlights") return <MonthlyHighlights onBack={() => show("home")} onNavigate={show} onNearby={showNearby} onSelect={(place) => selectPlace(place, "highlights")} />;
 
-  if (screen === "route") return <main className="mobile-stage app-screen route-screen">
-    <AppHeader title="Minha rota" onBack={() => show("home")} />
-    <div className="map-preview" aria-label="Prévia geográfica da rota">
-      <div className="map-water" /><i /><i /><i />
-      {routePlaces.length > 1 && <svg className="route-map-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points={routePlaces.map((place) => { const point = getMapPoint(place); return `${point.x},${point.y}`; }).join(" ")} /></svg>}
-      {routePlaces.map((place, index) => { const point = getMapPoint(place); return <button key={place.id} className="route-map-pin" style={{ left: `${point.x}%`, top: `${point.y}%` }} onClick={() => selectPlace(place, "route")} aria-label={`Ver parada ${index + 1}: ${place.name}`}><span>{index + 1}</span></button>; })}
-      {!routePlaces.length && <p className="map-empty-state">Selecione pontos para visualizar seu caminho.</p>}
-    </div>
-    <section className="route-summary"><div className="route-summary__heading"><div><p>Seu roteiro</p><h2>Rota de hoje</h2></div>{route.length > 0 && <span>{route.length} {route.length === 1 ? "parada" : "paradas"} · {formatRouteDuration(routeVisitMinutes)}</span>}</div>{route.length ? routePlaces.map((place, index) => <div className="route-summary__item" key={place.id}><b>{index + 1}</b><Image src={place.image} alt="" /><span>{place.name}<small>{place.duration} · {place.category}</small></span><button onClick={() => removeStop(place.id)} aria-label={`Remover ${place.name}`}><Icon name="x" /></button></div>) : <p className="empty-route">Sua rota ainda está vazia. Escolha pontos para começar.</p>}<button className="start-route" disabled={!route.length} onClick={() => { setRouteStarted(true); setToast(`Rota iniciada! Boa caminhada, ${user?.name ?? "Admin"}.`); }}><Icon name="route" /> {routeStarted ? "Rota em andamento" : "Começar rota"}</button></section>
-    <BottomNav active="route" onNavigate={show} />
-    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
-  </main>;
-
-  return <main className="mobile-stage app-screen profile-screen">
-    <section className="profile-hero"><div className="profile-statue"><Icon name="user" /></div><h1>Olá, {user?.name || "Admin"}!</h1></section>
-    <div className="profile-menu"><button onClick={() => setToast("A edição de perfil será disponibilizada em breve.")}><Icon name="user" /> Meu perfil <Icon name="chevron" /></button><button onClick={() => show("route")}><Icon name="route" /> Minha rota <Icon name="chevron" /></button><button onClick={() => { setCollection("popular"); show("search"); }}><Icon name="map" /> Explorar pontos <Icon name="chevron" /></button><button onClick={() => setToast("As configurações estarão disponíveis em breve.")}><Icon name="filter" /> Configurações <Icon name="chevron" /></button></div>
-    <button className="logout-button" onClick={() => { setUser(null); setScreen("login"); }}>Sair da conta</button><Wordmark small /><BottomNav active="profile" onNavigate={show} />
-    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
+  return <main className="mobile-stage app-screen home-screen">
+    <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><span /><span /><span /><span /></button></header>
+    <p className="home-helper"><span>Não encontramos esta tela</span><b>Volte para o início para continuar explorando São Luís.</b></p>
+    <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
   </main>;
 
 }
