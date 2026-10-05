@@ -9,8 +9,8 @@ import type { Place } from "@/app/mock-data";
 
 type TouristMapProps = {
   places: Place[];
-  activePlaceId?: number;
-  routePlaceIds?: number[];
+  selectedPlaceId?: number;
+  fullScreen?: boolean;
   onSelect: (place: Place) => void;
 };
 
@@ -25,8 +25,8 @@ function MapViewport({ places }: Pick<TouristMapProps, "places">) {
   return null;
 }
 
-function markerIcon(label: number, isInRoute: boolean, isActive: boolean) {
-  const state = isActive ? "is-active" : isInRoute ? "is-in-route" : "";
+function markerIcon(label: number, isSelected: boolean) {
+  const state = isSelected ? "is-active" : "";
   return L.divIcon({
     className: "tourist-map__marker-shell",
     html: `<span class="tourist-map__marker ${state}"><i>${label}</i></span>`,
@@ -36,11 +36,11 @@ function markerIcon(label: number, isInRoute: boolean, isActive: boolean) {
   });
 }
 
-export default function TouristMap({ places, activePlaceId, routePlaceIds = [], onSelect }: TouristMapProps) {
+export default function TouristMap({ places, selectedPlaceId, fullScreen = false, onSelect }: TouristMapProps) {
   const center: [number, number] = [-2.5294, -44.3055];
 
   return (
-    <section className="tourist-map" aria-labelledby="tourist-map-title">
+    <section className={`tourist-map ${fullScreen ? "tourist-map--full-screen" : ""}`} aria-labelledby="tourist-map-title">
       <div className="tourist-map__heading">
         <span className="tourist-map__eyebrow"><Icon name="map" /> Mapa dos pontos</span>
         <b id="tourist-map-title">{places.length} lugares para descobrir</b>
@@ -54,14 +54,12 @@ export default function TouristMap({ places, activePlaceId, routePlaceIds = [], 
         />
         <MapViewport places={places} />
         {places.map((place, index) => {
-          const routeIndex = routePlaceIds.indexOf(place.id);
-          const isInRoute = routeIndex >= 0;
-          const label = isInRoute ? routeIndex + 1 : index + 1;
+          const label = index + 1;
           return (
             <Marker
               key={place.id}
               position={[place.coordinates.latitude, place.coordinates.longitude]}
-              icon={markerIcon(label, isInRoute, activePlaceId === place.id)}
+              icon={markerIcon(label, selectedPlaceId === place.id)}
               eventHandlers={{ click: () => onSelect(place) }}
             >
               <Popup>

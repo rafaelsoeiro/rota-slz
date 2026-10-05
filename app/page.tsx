@@ -19,6 +19,9 @@ type NavActive = Screen | "nearby";
 type DetailOrigin = "search" | "highlights";
 type Coordinates = { latitude: number; longitude: number };
 
+const DEFAULT_MAP_ORIGIN: Coordinates = { latitude: -2.5292, longitude: -44.3061 };
+const popularPlaceIds = [1, 2, 6, 8, 12];
+
 const searchCategories = [
   { label: "Casarões", value: "casarão", image: casarõesCategory },
   { label: "Ruas e Praças", value: "rua", image: ruasPracasCategory },
@@ -116,6 +119,17 @@ function matchesSearchCategory(place: Place, value: string) {
   return false;
 }
 
+function formatDistance(distanceKm: number) {
+  return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1).replace(".", ",")} km`;
+}
+
+function MapPlaceSheet({ place, distanceKm, onOpen }: { place: Place; distanceKm?: number; onOpen: () => void }) {
+  return <button className="map-place-sheet" onClick={onOpen} aria-label={`Ver detalhes de ${place.name}`}>
+    <Image src={place.image} alt="" />
+    <span className="map-place-sheet__content"><small>{place.category}{distanceKm !== undefined ? ` · ${formatDistance(distanceKm)}` : ""}</small><b>{place.name}</b><span>Toque para ver mais detalhes <Icon name="chevron" /></span></span>
+  </button>;
+}
+
 function MonthlyHighlights({ onBack, onNavigate, onNearby, onSelect }: { onBack: () => void; onNavigate: (screen: Screen) => void; onNearby: () => void; onSelect: (place: Place) => void }) {
   const featuredPlaceIds = [12, 8, 17];
   const featuredPlaces = featuredPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
@@ -147,7 +161,10 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [collection, setCollection] = useState<"popular" | "nearby" | "highlights">("popular");
+  const [searchLandingVisible, setSearchLandingVisible] = useState(true);
+  const [nearbyRadiusKm, setNearbyRadiusKm] = useState(5);
   const [selectedPlace, setSelectedPlace] = useState<Place>(places[0]);
+  const [selectedMapPlace, setSelectedMapPlace] = useState<Place | null>(null);
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin>("search");
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [loginError, setLoginError] = useState("");
@@ -173,22 +190,23 @@ export default function Home() {
     });
   }, [activeCategory, query]);
   const nearbyPlaces = useMemo(() => {
-    const origin = userLocation ?? { latitude: -2.5292, longitude: -44.3061 };
+    const origin = userLocation ?? DEFAULT_MAP_ORIGIN;
     return places
       .map((place) => ({ place, distance: distanceInKilometers(origin, place.coordinates) }))
-      .filter(({ distance }) => distance < 5)
+      .filter(({ distance }) => distance <= nearbyRadiusKm)
       .sort((first, second) => first.distance - second.distance)
       .map(({ place }) => place);
-  }, [userLocation]);
-  const highlightsPlaceIds = [3, 1, 6, 8, 12];
-  const highlightsPlaces = highlightsPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
-  const collectionPlaces = collection === "popular" ? places.slice(0, 5) : collection === "nearby" ? nearbyPlaces : highlightsPlaces;
-  const mapPlaces = query || activeCategory ? visiblePlaces : collectionPlaces;
+  }, [nearbyRadiusKm, userLocation]);
+  const popularPlaces = popularPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
+  const mapPlaces = collection === "nearby" ? nearbyPlaces : query || activeCategory ? visiblePlaces : [];
+  const activeMapPlace = selectedMapPlace && mapPlaces.some((place) => place.id === selectedMapPlace.id) ? selectedMapPlace : null;
 
-  const show = (next: Screen) => { if (next === "search") setCollection("popular"); setScreen(next); setQuery(""); setActiveCategory(null); };
-  const showCategory = (value: string) => { setCollection("popular"); setQuery(""); setActiveCategory(value); setScreen("search"); };
+  const show = (next: Screen) => { if (next === "search") { setCollection("popular"); setSearchLandingVisible(true); } setScreen(next); setQuery(""); setActiveCategory(null); };
+  const showPopular = () => { setCollection("popular"); setSearchLandingVisible(false); setQuery(""); setActiveCategory(null); setScreen("search"); };
+  const showCategory = (value: string) => { setCollection("popular"); setSearchLandingVisible(false); setQuery(""); setActiveCategory(value); setScreen("search"); };
   const showNearby = () => {
     setCollection("nearby");
+    setSearchLandingVisible(false);
     setQuery("");
     setActiveCategory(null);
     setUserLocation(null);
@@ -246,9 +264,9 @@ export default function Home() {
 
   if (screen === "home") return <main className="mobile-stage app-screen home-screen">
     <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><span /><span /><span /><span /></button></header>
-    <label className="home-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => { setCollection("popular"); setActiveCategory(null); setScreen("search"); }} placeholder="Para onde vamos?" /></label>
+    <label className="home-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => { setCollection("popular"); setActiveCategory(null); setSearchLandingVisible(true); setScreen("search"); }} placeholder="Para onde vamos?" /></label>
     <section className="home-sections">
-      <button className="home-section home-section--popular" onClick={() => { setCollection("popular"); show("search"); }}><span><b>Destinos populares</b><small>Histórias que todo mundo precisa viver</small></span><Icon name="sparkle" /></button>
+      <button className="home-section home-section--popular" onClick={showPopular}><span><b>Destinos populares</b><small>Histórias que todo mundo precisa viver</small></span><Icon name="sparkle" /></button>
       <button className="home-section home-section--nearby" onClick={showNearby}><span><b>Destinos próximos</b><small>Descubra o que está ao seu redor</small></span><Icon name="pin" /></button>
       <button className="home-section home-section--highlights" onClick={() => show("highlights")}><span><b>Destaques do mês</b><small>Experiências selecionadas para você</small></span><Icon name="star" /></button>
     </section>
@@ -258,15 +276,25 @@ export default function Home() {
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
-  if (screen === "search" && !query && !activeCategory && collection === "popular") return <SearchLanding query={query} onQueryChange={setQuery} onBack={() => show("home")} onCategory={showCategory} onNearby={showNearby} />;
+  if (screen === "search" && !query && !activeCategory && collection === "popular" && searchLandingVisible) return <SearchLanding query={query} onQueryChange={(value) => { setQuery(value); setSearchLandingVisible(!value); }} onBack={() => show("home")} onCategory={showCategory} onNearby={showNearby} />;
 
-  if (screen === "search") return <main className="mobile-stage app-screen list-screen">
-    <AppHeader title={activeCategory || query ? "Resultados" : collection === "popular" ? "Destinos populares" : collection === "nearby" ? "Destinos próximos" : "Destaques do mês"} onBack={() => show("home")} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} />
-    <label className={`list-search list-search--${collection}`}><Icon name="search" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar ponto turístico" /></label>
-    <p className="list-instruction">{query || activeCategory ? `${visiblePlaces.length} ponto${visiblePlaces.length === 1 ? "" : "s"} turístico${visiblePlaces.length === 1 ? "" : "s"} encontrado${visiblePlaces.length === 1 ? "" : "s"}` : collection === "nearby" ? userLocation ? `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} a menos de 5 km da sua localização` : `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} a menos de 5 km do Centro Histórico (estimativa)` : "Toque em um local para conhecer sua história"}</p>
-    {mapPlaces.length ? <TouristMap places={mapPlaces} onSelect={(place) => selectPlace(place, "search")} /> : <div className="not-found"><Icon name="pin" /><b>Nenhum destino próximo</b><span>Não encontramos pontos a menos de 5 km da referência selecionada.</span></div>}
-    {mapPlaces.length ? <PlaceList items={query || activeCategory ? visiblePlaces : collectionPlaces} color={collection === "nearby" ? "blue" : collection === "highlights" ? "green" : "yellow"} onSelect={(place) => selectPlace(place, "search")} /> : null}
-    {(query || activeCategory) && !visiblePlaces.length && <div className="not-found"><Icon name="search" /><b>Nenhum ponto encontrado</b><span>Todos os resultados são da nossa lista local de São Luís.</span></div>}
+  if (screen === "search" && collection === "popular" && !query && !activeCategory && !searchLandingVisible) return <main className="mobile-stage app-screen list-screen">
+    <AppHeader title="Destinos populares" onBack={() => show("home")} color="yellow" />
+    <p className="list-instruction">Uma seleção de lugares para começar a descobrir São Luís.</p>
+    <PlaceList items={popularPlaces} color="yellow" onSelect={(place) => selectPlace(place, "search")} />
+    <BottomNav active="search" onNavigate={show} onNearby={showNearby} />
+    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
+  </main>;
+
+  if (screen === "search") return <main className={`mobile-stage map-search-screen ${collection === "nearby" ? "map-search-screen--nearby" : ""}`}>
+    <AppHeader title={collection === "nearby" ? "Destinos próximos" : "Resultados"} onBack={() => show("home")} color={collection === "nearby" ? "blue" : "yellow"} />
+    <section className="map-search-controls" aria-label="Controles de busca">
+      <label className={`list-search list-search--${collection}`}><Icon name="search" /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setSearchLandingVisible(!event.target.value); }} placeholder="Buscar ponto turístico" /></label>
+      {collection === "nearby" && <label className="radius-control"><span>Raio de busca <b>{nearbyRadiusKm} km</b></span><input type="range" min="1" max="20" step="1" value={nearbyRadiusKm} onChange={(event) => setNearbyRadiusKm(Number(event.target.value))} aria-label="Raio de busca em quilômetros" /></label>}
+      <p>{query || activeCategory ? `${visiblePlaces.length} resultado${visiblePlaces.length === 1 ? "" : "s"}` : collection === "nearby" ? userLocation ? `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} no raio selecionado` : `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} do Centro Histórico (estimativa)` : "Pontos correspondentes à pesquisa"}</p>
+    </section>
+    {mapPlaces.length ? <TouristMap places={mapPlaces} selectedPlaceId={activeMapPlace?.id} fullScreen onSelect={setSelectedMapPlace} /> : <div className="map-search-empty"><Icon name={collection === "nearby" ? "pin" : "search"} /><b>{collection === "nearby" ? "Nenhum destino neste raio" : "Nenhum ponto encontrado"}</b><span>{collection === "nearby" ? "Aumente o raio ou tente novamente em outra região." : "Tente outro nome, endereço ou categoria."}</span></div>}
+    {activeMapPlace && <MapPlaceSheet place={activeMapPlace} distanceKm={collection === "nearby" ? distanceInKilometers(userLocation ?? DEFAULT_MAP_ORIGIN, activeMapPlace.coordinates) : undefined} onOpen={() => selectPlace(activeMapPlace, "search")} />}
     <BottomNav active={collection === "nearby" ? "nearby" : "search"} onNavigate={show} onNearby={showNearby} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
