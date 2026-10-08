@@ -36,6 +36,7 @@ export type RoutePlannerProps = {
   defaultValue?: RoutePlannerState;
   onChange?: (state: RoutePlannerState) => void;
   onSave?: (route: PlannedRoute, summary: RouteSummary) => void;
+  onDelete?: (route: PlannedRoute) => void;
   onSelectRoute?: (route: PlannedRoute) => void;
   onOpenPlace?: (place: Place) => void;
   onOpenMap?: (route: PlannedRoute, summary: RouteSummary) => void;
@@ -92,12 +93,13 @@ function routeFromIds(route: PlannedRoute, ids: number[]): PlannedRoute {
 }
 
 export function RoutePlanner({
-  places = demoPlaces, value, defaultValue, onChange, onSave, onSelectRoute,
+  places = demoPlaces, value, defaultValue, onChange, onSave, onDelete, onSelectRoute,
   onOpenPlace, onOpenMap, onBack, className = "",
 }: RoutePlannerProps) {
   const uid = useId();
   const [localState, setLocalState] = useState<RoutePlannerState>(() => defaultValue ?? initialState(places));
   const [message, setMessage] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const state = value ?? localState;
   const active = state.routes.find((route) => route.id === state.activeRouteId) ?? state.routes[0] ?? null;
   const route = state.draft ?? active;
@@ -112,6 +114,7 @@ export function RoutePlanner({
 
   function selectRoute(next: PlannedRoute) {
     update({ ...state, activeRouteId: next.id, draft: null });
+    setPendingDeleteId(null);
     setMessage("");
     onSelectRoute?.(next);
   }
@@ -123,6 +126,7 @@ export function RoutePlanner({
       id: `route-${index}`, name: `Rota ${index}`, originId: null, destinationId: null, stopIds: [],
     };
     update({ ...state, draft });
+    setPendingDeleteId(null);
     setMessage("");
   }
 
@@ -145,6 +149,15 @@ export function RoutePlanner({
     update({ routes, activeRouteId: saved.id, draft: null });
     setMessage(`${saved.name} salva nesta sessão!`);
     onSave?.(saved, summarizeRoute(saved, places));
+  }
+
+  function deleteRoute(target: PlannedRoute) {
+    const routes = state.routes.filter((item) => item.id !== target.id);
+    const nextActive = routes.find((item) => item.id === state.activeRouteId) ?? routes[0] ?? null;
+    update({ routes, activeRouteId: nextActive?.id ?? null, draft: null });
+    setPendingDeleteId(null);
+    setMessage(`${target.name} excluída.`);
+    onDelete?.(target);
   }
 
   return <section className={`route-planner route-planner--wireframe ${className}`} aria-labelledby={`${uid}-title`}
@@ -175,7 +188,12 @@ export function RoutePlanner({
       <div className="rp-wire-actions rp-wire-actions--saved">
         <button type="button" onClick={() => startDraft(route)}><Icon name="plus" /> Editar rota</button>
         <button type="button" disabled={summary.places.length < 2} onClick={() => onOpenMap?.(route, summary)}><Icon name="map" /> Ver no mapa</button>
+        <button type="button" className="rp-wire-delete" onClick={() => setPendingDeleteId(route.id)}><Icon name="trash" /> Excluir rota</button>
       </div>
+      {pendingDeleteId === route.id && <div className="rp-delete-confirmation" role="alert">
+        <p>Excluir “{route.name}”? Esta ação não pode ser desfeita.</p>
+        <div><button type="button" onClick={() => setPendingDeleteId(null)}>Cancelar</button><button type="button" onClick={() => deleteRoute(route)}>Confirmar exclusão</button></div>
+      </div>}
     </> : <p className="rp-wire-empty">Nenhuma rota criada. Toque em “Nova rota” para começar.</p>}
 
     <p className="rp-wire-feedback" role="status" aria-live="polite">{message}</p>
@@ -198,7 +216,7 @@ const styles = `
 .rp-wire-header{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center;gap:10px;margin-bottom:14px}.rp-wire-back{display:grid;width:46px;height:46px;place-items:center;padding:0;border:0;border-radius:50%;background:var(--rp-gold);color:var(--rp-blue);box-shadow:0 2px 0 rgba(172,123,0,.18)}.rp-wire-back svg{width:27px}.rp-wire-header h1{display:grid;min-height:43px;place-items:center;margin:0;padding:7px 16px;border-radius:22px 22px 12px 12px;background:var(--rp-gold);color:white;font-size:18px;line-height:1;text-align:center;text-transform:uppercase;box-shadow:0 2px 0 rgba(172,123,0,.18)}
 .rp-route-tabs{display:flex;gap:7px;margin:0 0 15px;padding:0 2px;overflow-x:auto;scrollbar-width:none}.rp-route-tabs::-webkit-scrollbar{display:none}.rp-route-tabs button{display:flex;min-height:34px;flex:0 0 auto;align-items:center;gap:4px;padding:6px 12px;border:2px solid var(--rp-gold);border-radius:18px;background:#fff8d7;color:#b17e00;font-size:11px;font-weight:700}.rp-route-tabs button.is-active{background:var(--rp-gold);color:white}.rp-route-tabs svg{width:15px}
 .rp-wire-list{display:grid;gap:10px}.rp-wire-place{display:grid;grid-template-columns:78px minmax(0,1fr) 17px;align-items:center;gap:8px;width:100%;min-height:68px;padding:0 10px 0 0;border:0;background:transparent;color:#a87800;text-align:left}.rp-wire-photo{position:relative;display:grid;width:78px;height:68px;place-items:center;border-radius:10px;background:var(--rp-gold);overflow:hidden}.rp-wire-photo img{width:58px;height:52px;border:2px solid rgba(255,255,255,.82);border-radius:3px;object-fit:cover}.rp-wire-photo b{position:absolute;right:5px;bottom:5px;display:grid;width:20px;height:20px;place-items:center;border-radius:50%;background:var(--rp-blue);color:white;font:700 10px Arial,sans-serif}.rp-wire-copy{display:grid;min-width:0;min-height:68px;align-content:center;gap:4px;padding:9px 12px;border:4px solid var(--rp-gold);border-radius:10px;background:#fff3b7}.rp-wire-copy>b{overflow:hidden;font-size:13px;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}.rp-wire-copy small{overflow:hidden;color:#b59742;font:9px Arial,sans-serif;text-overflow:ellipsis;white-space:nowrap}.rp-wire-copy i{display:grid;grid-template-columns:2fr 1.2fr;gap:5px;margin-top:2px}.rp-wire-copy i span{height:4px;border-radius:4px;background:#e1b000}.rp-wire-place>svg{width:17px}.rp-wire-place.is-selected .rp-wire-copy{background:#ffe784}.rp-wire-place:hover .rp-wire-copy{background:#ffed9b}
-.rp-route-name{display:grid;gap:5px;margin-bottom:10px;color:#a87800;font-size:11px;font-weight:700}.rp-route-name input{width:100%;height:39px;padding:0 12px;border:3px solid var(--rp-gold);border-radius:10px;background:#fff8d7;color:#8d6a0b;outline:0}.rp-wire-help{margin:0 2px 12px;color:#8c846b;font:11px/1.4 Arial,sans-serif}.rp-wire-list--editing{max-height:calc(100svh - 365px);overflow-y:auto;padding:2px 2px 5px}.rp-wire-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}.rp-wire-actions button{display:flex;min-height:40px;align-items:center;justify-content:center;gap:5px;padding:8px;border:0;border-radius:20px;background:var(--rp-gold);color:white;font-size:11px;font-weight:700;text-transform:uppercase}.rp-wire-actions button+button{background:var(--rp-blue)}.rp-wire-actions svg{width:16px}.rp-wire-actions--saved{margin-top:16px}.rp-wire-feedback{min-height:16px;margin:10px 0 0;color:#4d8b43;font:11px Arial,sans-serif;text-align:center}.rp-wire-empty{margin:30px 5px;padding:20px;border:3px solid var(--rp-gold);border-radius:12px;background:#fff3b7;font-size:12px;text-align:center}.rp-wire-logo{width:108px;height:auto;margin:auto auto 0;object-fit:contain}
+.rp-route-name{display:grid;gap:5px;margin-bottom:10px;color:#a87800;font-size:11px;font-weight:700}.rp-route-name input{width:100%;height:39px;padding:0 12px;border:3px solid var(--rp-gold);border-radius:10px;background:#fff8d7;color:#8d6a0b;outline:0}.rp-wire-help{margin:0 2px 12px;color:#8c846b;font:11px/1.4 Arial,sans-serif}.rp-wire-list--editing{max-height:calc(100svh - 365px);overflow-y:auto;padding:2px 2px 5px}.rp-wire-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}.rp-wire-actions button{display:flex;min-height:40px;align-items:center;justify-content:center;gap:5px;padding:8px;border:0;border-radius:20px;background:var(--rp-gold);color:white;font-size:11px;font-weight:700;text-transform:uppercase}.rp-wire-actions button+button{background:var(--rp-blue)}.rp-wire-actions svg{width:16px}.rp-wire-actions--saved{margin-top:16px}.rp-wire-actions--saved .rp-wire-delete{grid-column:1/-1;background:#b84f43}.rp-delete-confirmation{margin-top:10px;padding:12px;border:2px solid #d9897e;border-radius:12px;background:#fff0ec;color:#7e332b;font:11px/1.4 Arial,sans-serif;text-align:center}.rp-delete-confirmation p{margin:0 0 10px}.rp-delete-confirmation>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rp-delete-confirmation button{min-height:36px;padding:7px;border:0;border-radius:18px;background:#ded7c8;color:#675e4d;font:700 10px Arial,sans-serif;text-transform:uppercase}.rp-delete-confirmation button+button{background:#b84f43;color:white}.rp-wire-feedback{min-height:16px;margin:10px 0 0;color:#4d8b43;font:11px Arial,sans-serif;text-align:center}.rp-wire-empty{margin:30px 5px;padding:20px;border:3px solid var(--rp-gold);border-radius:12px;background:#fff3b7;font-size:12px;text-align:center}.rp-wire-logo{width:108px;height:auto;margin:auto auto 0;object-fit:contain}
 @media(max-width:350px){.route-planner--wireframe{padding-right:0;padding-left:0}.rp-wire-place{grid-template-columns:66px minmax(0,1fr) 14px}.rp-wire-photo{width:66px}.rp-wire-photo img{width:51px}.rp-wire-copy{padding-right:8px;padding-left:8px}.rp-wire-header h1{font-size:15px}}
 `;
 

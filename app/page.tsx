@@ -18,7 +18,7 @@ import qrCodeBlue from "../assets/icones/qr-code-blue.png";
 import streetLamp from "../assets/splashScreen/poste.png";
 import loginPortal from "../assets/portal_login_scream.png";
 import UserArea, { type UserAreaLanguage } from "@/components/user-area";
-import RoutePlanner, { type RoutePlannerState } from "@/components/route-planner";
+import RoutePlanner, { type PlannedRoute, type RoutePlannerState, type RouteSummary } from "@/components/route-planner";
 
 type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "detail" | "map" | "routes" | "profile";
 type NavActive = Screen | "nearby";
@@ -249,6 +249,7 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [routePlannerState, setRoutePlannerState] = useState<RoutePlannerState>();
+  const [mappedRoute, setMappedRoute] = useState<{ name: string; placeIds: number[] } | null>(null);
 
   useEffect(() => {
     const redirect = window.setTimeout(() => setScreen("login"), 2200);
@@ -293,11 +294,11 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const shouldTrack = screen === "map" || (screen === "search" && collection === "nearby");
+    const shouldTrack = (screen === "map" && !mappedRoute) || (screen === "search" && collection === "nearby");
     if (!shouldTrack || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(applyUserLocation, handleLocationError, { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 });
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [applyUserLocation, collection, handleLocationError, screen]);
+  }, [applyUserLocation, collection, handleLocationError, mappedRoute, screen]);
 
   const visiblePlaces = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -317,10 +318,15 @@ export default function Home() {
   const touristMapPlaces = useMemo(() => userLocation
     ? places.filter((place) => distanceInKilometers(userLocation, place.coordinates) <= nearbyRadiusKm)
     : places, [nearbyRadiusKm, userLocation]);
+  const mappedRoutePlaces = useMemo(() => mappedRoute?.placeIds.flatMap((id) => {
+    const place = places.find((item) => item.id === id);
+    return place ? [place] : [];
+  }) ?? [], [mappedRoute]);
   const popularPlaces = popularPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
   const mapPlaces = collection === "nearby" ? nearbyPlaces : query || activeCategory ? visiblePlaces : [];
   const activeMapPlace = selectedMapPlace && mapPlaces.some((place) => place.id === selectedMapPlace.id) ? selectedMapPlace : null;
-  const activeTouristMapPlace = selectedMapPlace && touristMapPlaces.some((place) => place.id === selectedMapPlace.id) ? selectedMapPlace : null;
+  const fullMapPlaces = mappedRoute ? mappedRoutePlaces : touristMapPlaces;
+  const activeTouristMapPlace = selectedMapPlace && fullMapPlaces.some((place) => place.id === selectedMapPlace.id) ? selectedMapPlace : null;
   const locationStatusLabel = locationStatus === "active" ? "Localização ativa"
     : locationStatus === "requesting" ? "Obtendo sua localização…"
       : locationStatus === "denied" ? "Localização bloqueada"
@@ -380,7 +386,12 @@ export default function Home() {
   };
 
   const toggleFavorite = (id: number) => setFavoriteIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const openMap = () => { setSelectedMapPlace(null); prepareLocationTracking(); setScreen("map"); };
+  const openMap = () => { setMappedRoute(null); setSelectedMapPlace(null); prepareLocationTracking(); setScreen("map"); };
+  const openRouteMap = (route: PlannedRoute, summary: RouteSummary) => {
+    setMappedRoute({ name: route.name, placeIds: summary.places.map((place) => place.id) });
+    setSelectedMapPlace(null);
+    setScreen("map");
+  };
   const openProfile = () => setScreen("profile");
 
   if (screen === "splash") return <main className="mobile-stage splash-screen" aria-label="Rota São Luís"><div className="splash-sun" aria-hidden="true" /><div className="splash-lamp" aria-hidden="true"><Image src={streetLamp} alt="" priority /><b>N</b></div><BrandLogo className="brand-logo--splash" /></main>;
@@ -440,21 +451,23 @@ export default function Home() {
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
-  if (screen === "map") return <main className="mobile-stage map-search-screen">
-    <AppHeader title="Mapa turístico" onBack={() => show("home")} color="blue" />
-    <section className="map-search-controls map-tourist-controls" aria-label="Controles do mapa turístico">
+  if (screen === "map") return <main className={`mobile-stage map-search-screen ${mappedRoute ? "map-route-screen" : ""}`}>
+    <AppHeader title={mappedRoute?.name ?? "Mapa turístico"} onBack={() => show(mappedRoute ? "routes" : "home")} color="blue" />
+    {mappedRoute ? <section className="map-search-controls map-route-controls" aria-label="Resumo do percurso">
+      <div className="route-map-summary"><Icon name="route" /><span><b>{mappedRoutePlaces.length} pontos no percurso</b><small>Siga a numeração para percorrer a rota a pé na ordem planejada.</small></span></div>
+    </section> : <section className="map-search-controls map-tourist-controls" aria-label="Controles do mapa turístico">
       <label className="radius-control"><span>Distância dos pontos <b>{nearbyRadiusKm} km</b></span><input type="range" min="1" max="20" step="1" value={nearbyRadiusKm} disabled={!userLocation} onChange={(event) => setNearbyRadiusKm(Number(event.target.value))} aria-label="Distância máxima dos pontos turísticos em quilômetros" /></label>
       <p className={`map-location-status map-location-status--${locationStatus}`}><Icon name="locate" />{locationStatusLabel}</p>
-    </section>
-    <TouristMap places={touristMapPlaces} selectedPlaceId={activeTouristMapPlace?.id} fullScreen onSelect={setSelectedMapPlace} onOpenDetails={(place) => selectPlace(place, "map")} userLocation={userLocation} userLocationAccuracy={userLocationAccuracy} onRequestLocation={requestUserLocation} />
-    {userLocation && touristMapPlaces.length === 0 && <div className="map-radius-notice" role="status">Nenhum ponto turístico em um raio de {nearbyRadiusKm} km.</div>}
+    </section>}
+    <TouristMap places={fullMapPlaces} selectedPlaceId={activeTouristMapPlace?.id} fullScreen connectPlaces={Boolean(mappedRoute)} onSelect={setSelectedMapPlace} onOpenDetails={(place) => selectPlace(place, "map")} userLocation={mappedRoute ? null : userLocation} userLocationAccuracy={userLocationAccuracy} onRequestLocation={mappedRoute ? undefined : requestUserLocation} />
+    {!mappedRoute && userLocation && touristMapPlaces.length === 0 && <div className="map-radius-notice" role="status">Nenhum ponto turístico em um raio de {nearbyRadiusKm} km.</div>}
     {activeTouristMapPlace && <MapPlaceSheet place={activeTouristMapPlace} onOpen={() => selectPlace(activeTouristMapPlace, "map")} />}
-    <BottomNav active="map" onNavigate={show} onMap={openMap} onProfile={openProfile} />
+    <BottomNav active={mappedRoute ? "routes" : "map"} onNavigate={show} onMap={openMap} onProfile={openProfile} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
   if (screen === "routes") return <main className="mobile-stage app-screen planner-screen">
-    <RoutePlanner places={places} value={routePlannerState} onChange={setRoutePlannerState} onBack={() => show("home")} onOpenPlace={(place) => selectPlace(place, "routes")} onOpenMap={() => openMap()} />
+    <RoutePlanner places={places} value={routePlannerState} onChange={setRoutePlannerState} onBack={() => show("home")} onOpenPlace={(place) => selectPlace(place, "routes")} onOpenMap={openRouteMap} />
     <BottomNav active="routes" onNavigate={show} onMap={openMap} onProfile={openProfile} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;

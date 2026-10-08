@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Star,
+  Trash2,
   Trophy,
   UserRound,
   X,
@@ -41,6 +42,7 @@ type IconName =
   | "search"
   | "sparkle"
   | "star"
+  | "trash"
   | "trophy"
   | "user"
   | "x";
@@ -63,6 +65,7 @@ const icons: Record<IconName, LucideIcon> = {
   search: Search,
   sparkle: Sparkles,
   star: Star,
+  trash: Trash2,
   trophy: Trophy,
   user: UserRound,
   x: X,
