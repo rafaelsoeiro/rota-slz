@@ -15,10 +15,14 @@ import restaurantesCategory from "../assets/categorias/restaurantes&cafes.png";
 import igrejasCategory from "../assets/categorias/igrejas.png";
 import lojasCategory from "../assets/categorias/lojas&sebos.png";
 import qrCodeBlue from "../assets/icones/qr-code-blue.png";
+import streetLamp from "../assets/splashScreen/poste.png";
+import loginPortal from "../assets/portal_login_scream.png";
+import UserArea, { type UserAreaLanguage } from "@/components/user-area";
+import RoutePlanner, { type RoutePlannerState } from "@/components/route-planner";
 
-type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "detail";
+type Screen = "splash" | "login" | "signup" | "home" | "search" | "highlights" | "detail" | "map" | "routes" | "profile";
 type NavActive = Screen | "nearby";
-type DetailOrigin = "search" | "highlights";
+type DetailOrigin = "search" | "highlights" | "map" | "profile" | "routes";
 type Coordinates = { latitude: number; longitude: number };
 
 const DEFAULT_MAP_ORIGIN: Coordinates = { latitude: -2.5292, longitude: -44.3061 };
@@ -46,11 +50,12 @@ function BrandLogo({ className = "" }: { className?: string }) {
   return <Image className={`brand-logo ${className}`} src={brandLogo} alt="Rota São Luís" priority />;
 }
 
-function BottomNav({ onNavigate, onNearby, active }: { active: NavActive; onNavigate: (screen: Screen) => void; onNearby: () => void }) {
+function BottomNav({ onNavigate, onMap, onProfile, active }: { active: NavActive; onNavigate: (screen: Screen) => void; onMap: () => void; onProfile: () => void }) {
   return <nav className="bottom-nav" aria-label="Navegação principal">
-    <button onClick={() => onNavigate("search")} aria-label="Explorar destinos"><Icon name="search" /></button>
     <button className="home-button" onClick={() => onNavigate("home")} aria-label="Tela inicial"><span><Image src={homeNavigationIcon} alt="" /></span></button>
-    <button className={active === "nearby" ? "is-active" : ""} onClick={onNearby} aria-label="Destinos próximos"><Icon name="pin" /></button>
+    <button className={active === "map" || active === "nearby" ? "is-active" : ""} onClick={onMap} aria-label="Mapa"><Icon name="map" /></button>
+    <button className={active === "routes" ? "is-active" : ""} onClick={() => onNavigate("routes")} aria-label="Minhas rotas"><Icon name="route" /></button>
+    <button className={active === "profile" ? "is-active" : ""} onClick={onProfile} aria-label="Área do usuário"><Icon name="user" /></button>
   </nav>;
 }
 
@@ -142,7 +147,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
   </div>;
 }
 
-function SearchLanding({ query, onQueryChange, onBack, onCategory, onNearby }: { query: string; onQueryChange: (value: string) => void; onBack: () => void; onCategory: (value: string) => void; onNearby: () => void }) {
+function SearchLanding({ query, onQueryChange, onBack, onCategory, onMap, onProfile }: { query: string; onQueryChange: (value: string) => void; onBack: () => void; onCategory: (value: string) => void; onMap: () => void; onProfile: () => void }) {
   return <main className="mobile-stage app-screen search-landing-screen">
     <header className="search-landing-header">
       <button className="search-landing-menu" onClick={onBack} aria-label="Voltar para a tela inicial"><span /><span /><span /></button>
@@ -160,7 +165,7 @@ function SearchLanding({ query, onQueryChange, onBack, onCategory, onNearby }: {
         <span>{category.label}</span>
       </button>)}
     </section>
-    <BottomNav active="search" onNavigate={(screen) => screen === "home" ? onBack() : undefined} onNearby={onNearby} />
+    <BottomNav active="home" onNavigate={(screen) => screen === "home" ? onBack() : undefined} onMap={onMap} onProfile={onProfile} />
   </main>;
 }
 
@@ -195,7 +200,7 @@ function MapPlaceSheet({ place, distanceKm, onOpen }: { place: Place; distanceKm
   </button>;
 }
 
-function MonthlyHighlights({ onBack, onNavigate, onNearby, onSelect }: { onBack: () => void; onNavigate: (screen: Screen) => void; onNearby: () => void; onSelect: (place: Place) => void }) {
+function MonthlyHighlights({ onBack, onNavigate, onMap, onProfile, onSelect }: { onBack: () => void; onNavigate: (screen: Screen) => void; onMap: () => void; onProfile: () => void; onSelect: (place: Place) => void }) {
   const featuredPlaceIds = [12, 8, 17];
   const featuredPlaces = featuredPlaceIds.map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
 
@@ -216,13 +221,18 @@ function MonthlyHighlights({ onBack, onNavigate, onNearby, onSelect }: { onBack:
       })}
     </section>
     <p className="highlights-note">Descubra caminhos especiais para viver São Luís neste mês.</p>
-    <BottomNav active="home" onNavigate={onNavigate} onNearby={onNearby} />
+    <BottomNav active="home" onNavigate={onNavigate} onMap={onMap} onProfile={onProfile} />
   </main>;
 }
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [accounts, setAccounts] = useState<MockUser[]>(mockUsers);
+  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const [language, setLanguage] = useState<UserAreaLanguage>("pt");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [visitedIds, setVisitedIds] = useState<number[]>([]);
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [collection, setCollection] = useState<"popular" | "nearby" | "highlights">("popular");
@@ -235,6 +245,7 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
   const [toast, setToast] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [routePlannerState, setRoutePlannerState] = useState<RoutePlannerState>();
 
   useEffect(() => {
     const redirect = window.setTimeout(() => setScreen("login"), 2200);
@@ -286,7 +297,7 @@ export default function Home() {
       { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 },
     );
   };
-  const selectPlace = (place: Place, origin: DetailOrigin) => { setSelectedPlace(place); setDetailOrigin(origin); setScreen("detail"); };
+  const selectPlace = (place: Place, origin: DetailOrigin) => { setSelectedPlace(place); setDetailOrigin(origin); setVisitedIds((current) => current.includes(place.id) ? current : [...current, place.id]); setScreen("detail"); };
   const returnFromDetail = () => setScreen(detailOrigin);
   const handleQrDetected = useCallback((value: string) => {
     const normalizedValue = value.trim().toLocaleLowerCase("pt-BR");
@@ -316,7 +327,7 @@ export default function Home() {
     const password = String(form.get("password") ?? "");
     const found = accounts.find((account) => (account.email.toLocaleLowerCase() === identity || account.name.toLocaleLowerCase() === identity) && account.password === password);
     if (!found) { setLoginError("Usuário ou senha incorretos."); return; }
-    setLoginError(""); setScreen("home");
+    setLoginError(""); setCurrentUser(found); setScreen("home");
   };
   const signup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -324,25 +335,29 @@ export default function Home() {
     const newAccount = { name: String(form.get("name") ?? "").trim(), email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), birth: String(form.get("birth") ?? "") };
     if (newAccount.password !== String(form.get("confirm") ?? "")) { setLoginError("As senhas não coincidem."); return; }
     if (accounts.some((account) => account.email.toLocaleLowerCase() === newAccount.email.toLocaleLowerCase())) { setLoginError("Este e-mail já está cadastrado."); return; }
-    setAccounts((current) => [...current, newAccount]); setLoginError(""); setScreen("home");
+    setAccounts((current) => [...current, newAccount]); setCurrentUser(newAccount); setLoginError(""); setScreen("home");
   };
 
-  if (screen === "splash") return <main className="mobile-stage splash-screen"><div className="splash-sun" /><div className="splash-lamp"><span /><i /></div><BrandLogo className="brand-logo--splash" /><p>Viva a história de cada caminho.</p></main>;
+  const toggleFavorite = (id: number) => setFavoriteIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const openMap = () => { setSelectedMapPlace(null); setScreen("map"); };
+  const openProfile = () => setScreen("profile");
 
-  if (screen === "login" || screen === "signup") return <main className="mobile-stage auth-screen">
-    {screen === "login" ? <BrandLogo className="brand-logo--login" /> : <div className="auth-arch"><div className="arch-window"><span /><span /><span /></div><div className="arch-railing" /></div>}
+  if (screen === "splash") return <main className="mobile-stage splash-screen" aria-label="Rota São Luís"><div className="splash-sun" aria-hidden="true" /><div className="splash-lamp" aria-hidden="true"><Image src={streetLamp} alt="" priority /><b>N</b></div><BrandLogo className="brand-logo--splash" /></main>;
+
+  if (screen === "login" || screen === "signup") return <main className={`mobile-stage auth-screen ${screen === "login" ? "auth-screen--login" : "auth-screen--signup"}`}>
+    {screen === "login" ? <><Image className="login-portal-image" src={loginPortal} alt="Portal arquitetônico de São Luís" priority /><h1 className="login-welcome"><small>BEM</small><span>VINDO</span></h1></> : <div className="auth-arch"><div className="arch-window"><span /><span /><span /></div><div className="arch-railing" /></div>}
     <section className="auth-card">
       <p>{screen === "login" ? "Entre e crie memórias pelos caminhos de São Luís." : "Crie sua conta e comece a montar sua rota."}</p>
       <form onSubmit={screen === "login" ? login : signup}>
         {screen === "signup" && <label>Nome completo<input name="name" required placeholder="Seu nome" /></label>}
         {screen === "signup" && <label>Data de nascimento<input name="birth" type="date" required /></label>}
-        <label>{screen === "login" ? "E-mail ou usuário" : "E-mail"}<input name="email" required autoComplete="username" placeholder={screen === "login" ? "admin" : "nome@exemplo.com"} /></label>
-        <label>Senha<input name="password" required minLength={6} type="password" autoComplete={screen === "login" ? "current-password" : "new-password"} placeholder="••••••" /></label>
+        <label>{screen === "login" ? "E-mail ou usuário" : "E-mail"}<input name="email" required autoComplete="username" placeholder={screen === "login" ? "email" : "nome@exemplo.com"} /></label>
+        <label>Senha<input name="password" required minLength={6} type="password" autoComplete={screen === "login" ? "current-password" : "new-password"} placeholder={screen === "login" ? "senha" : "••••••"} /></label>
         {screen === "signup" && <label>Confirme a senha<input name="confirm" required minLength={6} type="password" placeholder="••••••" /></label>}
         {loginError && <p className="form-error" role="alert">{loginError}</p>}
         <button className="auth-submit" type="submit">{screen === "login" ? "Entrar" : "Cadastrar"}</button>
       </form>
-      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use o usuário admin e a senha 123456.")}>Esqueci minha senha</button><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><button type="button" className="demo-login-button" onClick={() => { setLoginError(""); setScreen("home"); }} aria-label="Entrar rapidamente como admin">Demo: <b>admin</b> · 123456</button></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
+      {screen === "login" ? <><button className="forgot-button" onClick={() => setToast("Use qualquer um dos três usuários mockados com a senha 123456.")}>Esqueci minha senha</button><div className="social-login" aria-label="Opções sociais ilustrativas"><span>ou entre com</span><div><button type="button" onClick={() => setToast("Login social ilustrativo para o demo.")}>Apple</button><button type="button" onClick={() => setToast("Login social ilustrativo para o demo.")}>Google</button><button type="button" onClick={() => setToast("Login social ilustrativo para o demo.")}>Facebook</button></div></div><button className="auth-switch" onClick={() => { setLoginError(""); setScreen("signup"); }}>Ainda não tenho cadastro</button><button type="button" className="demo-login-button" onClick={() => { setLoginError(""); setCurrentUser(accounts[0]); setScreen("home"); }} aria-label="Entrar rapidamente como admin">Demo: <b>admin</b> · 123456</button></> : <button className="auth-switch" onClick={() => { setLoginError(""); setScreen("login"); }}>Já tenho uma conta</button>}
     </section>
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
@@ -356,18 +371,18 @@ export default function Home() {
       <button className="home-section home-section--highlights" onClick={() => show("highlights")}><span><b>Destaques do mês</b><small>Experiências selecionadas para você</small></span><Icon name="star" /></button>
     </section>
     <div className="home-helper"><span>Comece sua jornada</span><b>Escolha uma das experiências acima</b></div>
-    <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
+    <BottomNav active="home" onNavigate={show} onMap={openMap} onProfile={openProfile} />
     {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onDetected={handleQrDetected} />}
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
-  if (screen === "search" && !query && !activeCategory && collection === "popular" && searchLandingVisible) return <SearchLanding query={query} onQueryChange={(value) => { setQuery(value); setSearchLandingVisible(!value); }} onBack={() => show("home")} onCategory={showCategory} onNearby={showNearby} />;
+  if (screen === "search" && !query && !activeCategory && collection === "popular" && searchLandingVisible) return <SearchLanding query={query} onQueryChange={(value) => { setQuery(value); setSearchLandingVisible(!value); }} onBack={() => show("home")} onCategory={showCategory} onMap={openMap} onProfile={openProfile} />;
 
   if (screen === "search" && collection === "popular" && !query && !activeCategory && !searchLandingVisible) return <main className="mobile-stage app-screen list-screen">
     <AppHeader title="Destinos populares" onBack={() => show("home")} color="yellow" />
     <p className="list-instruction">Uma seleção de lugares para começar a descobrir São Luís.</p>
     <PlaceList items={popularPlaces} color="yellow" onSelect={(place) => selectPlace(place, "search")} />
-    <BottomNav active="search" onNavigate={show} onNearby={showNearby} />
+    <BottomNav active="home" onNavigate={show} onMap={openMap} onProfile={openProfile} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
@@ -378,25 +393,56 @@ export default function Home() {
       {collection === "nearby" && <label className="radius-control"><span>Raio de busca <b>{nearbyRadiusKm} km</b></span><input type="range" min="1" max="20" step="1" value={nearbyRadiusKm} onChange={(event) => setNearbyRadiusKm(Number(event.target.value))} aria-label="Raio de busca em quilômetros" /></label>}
       <p>{query || activeCategory ? `${visiblePlaces.length} resultado${visiblePlaces.length === 1 ? "" : "s"}` : collection === "nearby" ? userLocation ? `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} no raio selecionado` : `${nearbyPlaces.length} ponto${nearbyPlaces.length === 1 ? "" : "s"} do Centro Histórico (estimativa)` : "Pontos correspondentes à pesquisa"}</p>
     </section>
-    {mapPlaces.length ? <TouristMap places={mapPlaces} selectedPlaceId={activeMapPlace?.id} fullScreen onSelect={setSelectedMapPlace} /> : <div className="map-search-empty"><Icon name={collection === "nearby" ? "pin" : "search"} /><b>{collection === "nearby" ? "Nenhum destino neste raio" : "Nenhum ponto encontrado"}</b><span>{collection === "nearby" ? "Aumente o raio ou tente novamente em outra região." : "Tente outro nome, endereço ou categoria."}</span></div>}
+    {mapPlaces.length ? <TouristMap places={mapPlaces} selectedPlaceId={activeMapPlace?.id} fullScreen onSelect={setSelectedMapPlace} onOpenDetails={(place) => selectPlace(place, "search")} /> : <div className="map-search-empty"><Icon name={collection === "nearby" ? "pin" : "search"} /><b>{collection === "nearby" ? "Nenhum destino neste raio" : "Nenhum ponto encontrado"}</b><span>{collection === "nearby" ? "Aumente o raio ou tente novamente em outra região." : "Tente outro nome, endereço ou categoria."}</span></div>}
     {activeMapPlace && <MapPlaceSheet place={activeMapPlace} distanceKm={collection === "nearby" ? distanceInKilometers(userLocation ?? DEFAULT_MAP_ORIGIN, activeMapPlace.coordinates) : undefined} onOpen={() => selectPlace(activeMapPlace, "search")} />}
-    <BottomNav active={collection === "nearby" ? "nearby" : "search"} onNavigate={show} onNearby={showNearby} />
+    <BottomNav active={collection === "nearby" ? "nearby" : "home"} onNavigate={show} onMap={openMap} onProfile={openProfile} />
+    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
+  </main>;
+
+  if (screen === "map") return <main className="mobile-stage map-search-screen">
+    <AppHeader title="Mapa turístico" onBack={() => show("home")} color="blue" />
+    <TouristMap places={places} selectedPlaceId={selectedMapPlace?.id} fullScreen onSelect={setSelectedMapPlace} onOpenDetails={(place) => selectPlace(place, "map")} />
+    {selectedMapPlace && <MapPlaceSheet place={selectedMapPlace} onOpen={() => selectPlace(selectedMapPlace, "map")} />}
+    <BottomNav active="map" onNavigate={show} onMap={openMap} onProfile={openProfile} />
+  </main>;
+
+  if (screen === "routes") return <main className="mobile-stage app-screen planner-screen">
+    <RoutePlanner places={places} value={routePlannerState} onChange={setRoutePlannerState} onBack={() => show("home")} onOpenPlace={(place) => selectPlace(place, "routes")} onOpenMap={() => openMap()} />
+    <BottomNav active="routes" onNavigate={show} onMap={openMap} onProfile={openProfile} />
+    <FeedbackToast message={toast} onDismiss={() => setToast("")} />
+  </main>;
+
+  if (screen === "profile") return <main className="mobile-stage app-screen profile-screen">
+    <UserArea
+      userName={currentUser?.name}
+      userEmail={currentUser?.email}
+      userBirth={currentUser?.birth}
+      language={language}
+      onLanguageChange={setLanguage}
+      favoritePlaces={places.filter((place) => favoriteIds.includes(place.id))}
+      visitedPlaces={places.filter((place) => visitedIds.includes(place.id))}
+      notificationsEnabled={notificationsEnabled}
+      onNotificationsChange={setNotificationsEnabled}
+      onBack={() => show("home")}
+      onSelectPlace={(place) => selectPlace(place, "profile")}
+      onSupport={() => setToast("Suporte demonstrativo: envie uma mensagem pelo canal da equipe.")}
+    />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
   if (screen === "detail") return <main className="mobile-stage app-screen detail-screen">
     <AppHeader title="Galeria histórica" onBack={returnFromDetail} />
-    <article className="history-card"><Image src={selectedPlace.image} alt={selectedPlace.name} /><div><span className="place-kind">{selectedPlace.category}</span><h2>{selectedPlace.name}</h2><p>{selectedPlace.description}</p><p className="long-copy">Um convite para caminhar com calma, observar os detalhes e descobrir os encontros que fazem do Centro Histórico de São Luís um lugar único.</p><div className="history-meta"><span><Icon name="clock" /> {selectedPlace.duration}</span><span><Icon name="star" /> {selectedPlace.rating}</span></div></div></article>
-    <BottomNav active="search" onNavigate={show} onNearby={showNearby} />
+    <article className="history-card"><div className="detail-gallery">{selectedPlace.gallery.map((image, index) => <Image key={`${selectedPlace.id}-${index}`} src={image} alt={index === 0 ? selectedPlace.name : "Detalhe do local"} />)}</div><div><span className="place-kind">{selectedPlace.category}</span><h2>{selectedPlace.name}</h2><p>{selectedPlace.description}</p><p className="long-copy">{selectedPlace.history}</p><div className="history-meta"><span><Icon name="clock" /> {selectedPlace.duration}</span><span><Icon name="star" /> {selectedPlace.rating}</span></div><div className="detail-actions"><button className="route-add" onClick={() => toggleFavorite(selectedPlace.id)}><Icon name="heart" /> {favoriteIds.includes(selectedPlace.id) ? "Remover favorito" : "Favoritar local"}</button><button className="route-add detail-actions__blue" onClick={() => openMap()}><Icon name="map" /> Ver no mapa</button><button className="route-add detail-actions__green" onClick={() => show("routes")}><Icon name="route" /> Montar minha rota</button></div></div></article>
+    <BottomNav active="home" onNavigate={show} onMap={openMap} onProfile={openProfile} />
     <FeedbackToast message={toast} onDismiss={() => setToast("")} />
   </main>;
 
-  if (screen === "highlights") return <MonthlyHighlights onBack={() => show("home")} onNavigate={show} onNearby={showNearby} onSelect={(place) => selectPlace(place, "highlights")} />;
+  if (screen === "highlights") return <MonthlyHighlights onBack={() => show("home")} onNavigate={show} onMap={openMap} onProfile={openProfile} onSelect={(place) => selectPlace(place, "highlights")} />;
 
   return <main className="mobile-stage app-screen home-screen">
     <header className="home-top"><Wordmark small /><button className="qr-button" onClick={() => setScannerOpen(true)} aria-label="Abrir câmera e escanear QR Code"><Image src={qrCodeBlue} alt="" /></button></header>
     <p className="home-helper"><span>Não encontramos esta tela</span><b>Volte para o início para continuar explorando São Luís.</b></p>
-    <BottomNav active="home" onNavigate={show} onNearby={showNearby} />
+    <BottomNav active="home" onNavigate={show} onMap={openMap} onProfile={openProfile} />
   </main>;
 
 }

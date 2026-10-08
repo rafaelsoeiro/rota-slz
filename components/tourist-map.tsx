@@ -12,6 +12,7 @@ type TouristMapProps = {
   selectedPlaceId?: number;
   fullScreen?: boolean;
   onSelect: (place: Place) => void;
+  onOpenDetails?: (place: Place) => void;
 };
 
 function MapViewport({ places }: Pick<TouristMapProps, "places">) {
@@ -36,7 +37,7 @@ function markerIcon(label: number, isSelected: boolean) {
   });
 }
 
-export default function TouristMap({ places, selectedPlaceId, fullScreen = false, onSelect }: TouristMapProps) {
+export default function TouristMap({ places, selectedPlaceId, fullScreen = false, onSelect, onOpenDetails }: TouristMapProps) {
   const center: [number, number] = [-2.5294, -44.3055];
 
   return (
@@ -66,7 +67,7 @@ export default function TouristMap({ places, selectedPlaceId, fullScreen = false
                 <div className="tourist-map__popup">
                   <b>{place.name}</b>
                   <span>{place.category} · {place.duration}</span>
-                  <button onClick={() => onSelect(place)}>Ver detalhes</button>
+                  <button type="button" onClick={() => onOpenDetails?.(place)}>Ver detalhes</button>
                 </div>
               </Popup>
             </Marker>

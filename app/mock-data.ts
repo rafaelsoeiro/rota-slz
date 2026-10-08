@@ -68,6 +68,10 @@ export type Place = {
     longitude: number;
   };
   description: string;
+  history: string;
+  gallery: StaticImageData[];
+  isFavorite: boolean;
+  isVisited: boolean;
   duration: string;
   durationMinutes: number;
   address: string;
@@ -75,7 +79,9 @@ export type Place = {
   color: "yellow" | "blue" | "green";
 };
 
-export const places: Place[] = [
+type PlaceRecord = Omit<Place, "history" | "gallery" | "isFavorite" | "isVisited">;
+
+const placeRecords: PlaceRecord[] = [
   {
     id: 1,
     name: "Palácio dos Leões",
@@ -652,6 +658,49 @@ export const places: Place[] = [
     color: "yellow",
   },
 ];
+
+const placeHistories: Record<number, string> = {
+  1: "Erguido sobre o antigo forte de São Luís, o palácio guarda séculos de vida política maranhense e reúne referências à formação da capital.",
+  2: "O edifício ocupa a área central da antiga cidade colonial e atravessou diferentes períodos da administração municipal de São Luís.",
+  3: "A Rua do Giz faz parte do traçado antigo da Praia Grande e preserva casarões que testemunham o comércio e a vida urbana dos séculos passados.",
+  4: "Integrada ao núcleo histórico, a Rua do Egito conserva a escala e as fachadas que ajudam a contar a expansão da cidade colonial.",
+  5: "A Rua da Estrela tornou-se um dos caminhos mais movimentados da Praia Grande, ligando edifícios históricos a espaços de cultura e convivência.",
+  6: "O conjunto histórico de São Luís cresceu a partir da fundação francesa de 1612 e da ocupação portuguesa, preservando um raro acervo urbano colonial.",
+  7: "O beco leva o nome de Catarina Mina, mulher negra que conquistou autonomia e destaque na memória popular maranhense.",
+  8: "Entre vielas antigas da Praia Grande, o Beco da Regueira mantém a tradição de encontro em torno da comida e da música ludovicense.",
+  9: "Inaugurado em 1817 como Teatro União, recebeu depois o nome de Arthur Azevedo e permanece ligado à história das artes cênicas no Maranhão.",
+  10: "Instalado em um casarão do Centro Histórico, o museu apresenta ingredientes, modos de fazer e histórias que formam a cozinha maranhense.",
+  11: "O centro cultural ocupa um imóvel histórico restaurado e promove encontros entre artistas, acervos e manifestações culturais do estado.",
+  12: "O museu funciona em um casarão da Praia Grande e reúne obras visuais junto à tradição dos azulejos que marca a paisagem de São Luís.",
+  13: "A cidade construiu uma identidade própria em torno do reggae, conhecido localmente como música de radiola; o museu registra essa trajetória.",
+  14: "O centro reúne pesquisas e coleções que ajudam a compreender a arqueologia, os povos e a história natural do território maranhense.",
+  15: "O Tambor de Crioula, expressão afro-brasileira reconhecida como patrimônio cultural, ganha espaço de salvaguarda e transmissão nesta casa.",
+  16: "A casa homenageia o artesão Nhozinho e apresenta objetos, brinquedos e saberes ligados à cultura material e ao cotidiano maranhense.",
+  17: "O espaço apresenta festas, personagens e símbolos da cultura popular do Maranhão, com atenção especial ao universo do Bumba Meu Boi.",
+  18: "A vinagreira, ingrediente emblemático da culinária local, inspira o nome deste restaurante dedicado aos sabores maranhenses.",
+  19: "Na Praia Grande, a casa associa cozinha regional e frutos do mar ao ambiente acolhedor de um bairro marcado por mercados e casarões.",
+  20: "A região da Praça João Lisboa foi por muito tempo um ponto importante de circulação e comércio; o restaurante mantém essa tradição de encontro.",
+  21: "Em meio ao casario do centro, o bistrô valoriza ingredientes regionais e a herança culinária que atravessa gerações no Maranhão.",
+  22: "O empório oferece uma pausa no roteiro e aproxima visitantes de produtos e sabores presentes no cotidiano do Centro Histórico.",
+  23: "A cafeteria combina o convívio do centro antigo com referências à literatura e à produção cultural de São Luís.",
+  24: "Próxima à Praça João Lisboa, a cafeteria faz parte de uma área central que reúne histórias de comércio, circulação e vida cotidiana.",
+  25: "Dedicada a Nossa Senhora da Vitória, a Catedral da Sé é um dos marcos religiosos mais antigos e importantes do centro ludovicense.",
+  26: "A Igreja do Desterro está ligada à formação de um dos bairros mais antigos da cidade e às transformações da comunidade ao longo do tempo.",
+  27: "A igreja e a praça compõem um conjunto tradicional do centro, associado à devoção a Nossa Senhora dos Remédios e à memória urbana local.",
+  28: "O sebo prolonga a vocação cultural do centro ao dar circulação a livros usados, raridades e encontros entre leitores.",
+  29: "Conhecida também como Feira da Praia Grande, a Casa das Tulhas reúne há gerações produtos, temperos e especialidades do Maranhão.",
+  30: "A praça conecta edifícios cívicos e religiosos que marcaram a administração e a vida pública da capital maranhense.",
+  31: "A praça homenageia o poeta maranhense Gonçalves Dias e oferece uma vista marcante da cidade e da Igreja dos Remédios.",
+  32: "Dedicada ao poeta Nauro Machado, a praça tornou-se espaço de convivência e programação cultural em meio ao casario da Praia Grande.",
+};
+
+export const places: Place[] = placeRecords.map((place) => ({
+  ...place,
+  history: placeHistories[place.id],
+  gallery: [place.image, place.image, place.image],
+  isFavorite: false,
+  isVisited: false,
+}));
 
 export const monthlyHighlights = [
   { label: "Roteiro pelos azulejos", detail: "6 paradas · Centro Histórico", image: azulejos },
