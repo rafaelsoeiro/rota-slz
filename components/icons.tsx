@@ -6,6 +6,7 @@ import {
   Clock3,
   Compass,
   Heart,
+  LocateFixed,
   Map,
   MapPin,
   Menu,
@@ -31,6 +32,7 @@ type IconName =
   | "compass"
   | "filter"
   | "heart"
+  | "locate"
   | "map"
   | "menu"
   | "pin"
@@ -52,6 +54,7 @@ const icons: Record<IconName, LucideIcon> = {
   compass: Compass,
   filter: SlidersHorizontal,
   heart: Heart,
+  locate: LocateFixed,
   map: Map,
   menu: Menu,
   pin: MapPin,
